@@ -36,7 +36,7 @@ Ce fichier est la référence. Une conversation qui produit une leçon le suit d
 | Liste à mémoriser (mots, tables) | `lecon, cartes, quiz, oral` (jusqu'à 12 cartes) |
 | Poésie | `lecon, recitation, oral` |
 
-Pour une poésie, n'utilise que des textes du domaine public, ou un texte que le parent fournit lui-même pour l'usage de son enfant.
+Pour une poésie, n'utilise que des textes du domaine public. Si le texte n'est pas dans le domaine public (ou si tu ne peux pas le vérifier), ne le transcris pas, même depuis une photo : bloc `poeme` avec `"saisie_parent": true` et sans `strophes`. La tablette demande alors au parent de taper la poésie une fois (stockée sur l'appareil uniquement), puis la récitation fonctionne normalement. Tu peux ajouter des blocs originaux d'aide à la mémorisation (plan, repères), sans paraphrase vers à vers.
 
 **Activités**
 - Cartes : 5 à 8. Une notion par carte, réponse avec les mots de la leçon.
