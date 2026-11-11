@@ -55,6 +55,8 @@ MUT = [
  (M, "fraction /0", lambda d: blk(d, 3)["items"].__setitem__(0, "{frac:1/0} se lit")),
  (M, "question sur un schéma sans image", lambda d: d["quiz"][2].pop("image")),
  (M, "image de question non déclarée", lambda d: d["quiz"][2].update(image="img7")),
+ (P, "poème sans texte ni saisie parent", lambda d: d["lecon"]["blocs"][0].pop("strophes")),
+ (P, "saisie parent avec strophes", lambda d: d["lecon"]["blocs"][0].update(saisie_parent=True)),
  (P, "récitation vers un bloc non poème", lambda d: (d["lecon"]["blocs"].append({"id": "b2", "type": "paragraphe", "source": "p1", "texte": "x"}), d["recitation"].update(bloc="b2"))),
 ]
 # cas normal en v2 : une leçon rédigée par Claude n'a pas de liste d'alertes
@@ -62,6 +64,11 @@ sans_alertes = copy.deepcopy(G); sans_alertes.pop("alertes_lecture", None); sans
 [b.pop("source", None) for b in sans_alertes["lecon"]["blocs"]]
 e, _ = validate(sans_alertes); ok &= not e
 print(("OK   " if not e else "KO   ") + "leçon sans alertes ni sources (cas normal en v2)", *e, sep="\n     ")
+
+# poème tapé par le parent sur la tablette : pas de strophes dans la leçon
+saisie = copy.deepcopy(P); saisie["lecon"]["blocs"][0].pop("strophes"); saisie["lecon"]["blocs"][0]["saisie_parent"] = True
+e, _ = validate(saisie); ok &= not e
+print(("OK   " if not e else "KO   ") + "poème à saisir par le parent", *e, sep="\n     ")
 
 print("\nMutations (doivent être rejetées) :")
 for base, name, m in MUT:

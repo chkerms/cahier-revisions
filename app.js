@@ -1,7 +1,7 @@
 /* Cahier de révisions : lecteur de leçons chiffrées. Aucune dépendance externe. */
 "use strict";
 (function () {
-var VERSION = "1.0.1";
+var VERSION = "1.1.0";
 var app = document.getElementById("app");
 var nextBar = document.getElementById("next");
 var D = null, IMG = {}, LESSONS = [], FILTRE = "tout";
@@ -257,7 +257,7 @@ function blocOral(b) {
       S.push({ text: mathWords(b.termes.join(" " + SIGN[b.operation] + " ") + " = " + b.resultat), lang: "fr-FR" }); break;
     case "poeme":
       S.push({ text: b.titre + (b.auteur ? ", de " + b.auteur : "") + ".", lang: "fr-FR" });
-      b.strophes.forEach(function (st) { S.push({ text: st.join(", "), lang: "fr-FR" }); }); break;
+      (b.strophes || []).forEach(function (st) { S.push({ text: st.join(", "), lang: "fr-FR" }); }); break;
     case "frise": b.evenements.forEach(function (e) { r(e.repere + " : " + e.libelle + "."); }); break;
     case "schema_legende":
       var im = (D.images || []).filter(function (x) { return x.id === b.image; })[0];
@@ -316,9 +316,11 @@ function renderBloc(b, opts) {
           h("tbody", null, b.lignes.map(function (row) { return h("tr", null, row.map(function (c) { return h("td", null, rich(c)); })); }))))]; break;
     case "operation_posee": body = opEl(b); break;
     case "poeme": cls += " poeme";
+      if (!b.strophes) { body = [h("div", { class: "terme" }, b.titre), saisiePoeme(b)]; break; }
       body = [h("div", { class: "terme" }, b.titre),
         b.strophes.map(function (st) { return h("div", { class: "strophe" }, st.map(function (v) { return h("span", { class: "vers", text: v }); })); }),
-        b.auteur ? h("div", { class: "auteur", text: b.auteur }) : null]; break;
+        b.auteur ? h("div", { class: "auteur", text: b.auteur }) : null,
+        b.saisie_parent && !opts.noSay ? h("details", { class: "corriger" }, h("summary", { text: "✏️ Corriger le texte (parent)" }), saisiePoeme(b)) : null]; break;
     case "frise":
       body = h("ul", { class: "frise" }, b.evenements.map(function (e) {
         return h("li", null, h("span", { class: "rep", text: e.repere }), rich(e.libelle)); })); break;
@@ -511,6 +513,7 @@ function stepQuiz(main) {
 /* ------------------------------------------------------------ 4. récitation */
 function stepRecitation(main) {
   var b = BLOCS[D.recitation.bloc], level = 0, MAX = 4;
+  if (!b.strophes) { setNext(null); main.appendChild(h("section", { class: "card poeme" }, h("div", { class: "terme", text: b.titre }), saisiePoeme(b))); return; }
   var units = D.recitation.unite === "strophe" ? b.strophes.map(function (st) { return [st]; }) : b.strophes.map(function (st) { return st.map(function (v) { return [v]; }); });
   setNext(null);
   var zone = h("div"); main.appendChild(zone);
@@ -665,10 +668,35 @@ function stepCalculs(main) {
   show();
 }
 
+/* ------------------------------------------------------------ poésie tapée par le parent (texte jamais publié) */
+function poemeKey(b) { return "poeme:" + D.meta.id + ":" + b.id; }
+function poemeParse(s) {
+  var st = String(s || "").replace(/\r/g, "").split(/\n\s*\n/).map(function (x) {
+    return x.split("\n").map(function (v) { return v.trim(); }).filter(function (v) { return v; });
+  }).filter(function (x) { return x.length; });
+  return st.length ? st : null;
+}
+function poemeLocal(b) { try { return poemeParse(localStorage.getItem(poemeKey(b))); } catch (e) { return null; } }
+function saisiePoeme(b) {
+  var ta = h("textarea", { class: "mdp saisie-poeme", id: "saisie-poeme", rows: "12", "aria-label": "Texte de la poésie" });
+  try { ta.value = localStorage.getItem(poemeKey(b)) || ""; } catch (e) {}
+  var err = h("p", { class: "erreur", role: "alert" });
+  return h("div", { class: "saisie-parent" },
+    h("p", { class: "label", text: "✏️ Pour le parent : tape la poésie une seule fois" }),
+    h("p", { text: "Un vers par ligne, une ligne vide entre deux strophes. Le texte reste sur cette tablette." }),
+    ta, err,
+    h("button", { class: "btn primary", type: "button", id: "btn-poeme", text: "Enregistrer la poésie", onclick: function () {
+      var st = poemeParse(ta.value);
+      if (!st) { err.textContent = "Le texte est vide."; return; }
+      try { localStorage.setItem(poemeKey(b), ta.value.trim()); } catch (e) { err.textContent = "Enregistrement impossible sur cet appareil."; return; }
+      b.strophes = st; render();
+    } }));
+}
+
 /* ------------------------------------------------------------ ouverture d'une leçon */
 function openLesson(lesson) {
   D = lesson; BLOCS = {}; IMG = {};
-  D.lecon.blocs.forEach(function (b) { BLOCS[b.id] = b; });
+  D.lecon.blocs.forEach(function (b) { BLOCS[b.id] = b; if (b.saisie_parent) b.strophes = poemeLocal(b); });
   (D.images || []).forEach(function (im) {
     if (im.svg) IMG[im.id] = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(im.svg);
     else if (im.data) IMG[im.id] = im.data;

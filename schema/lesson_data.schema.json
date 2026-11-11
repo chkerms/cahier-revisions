@@ -1093,8 +1093,7 @@
       ],
       "unevaluatedProperties": false,
       "required": [
-        "titre",
-        "strophes"
+        "titre"
       ],
       "properties": {
         "type": {
@@ -1121,8 +1120,24 @@
               "maxLength": 80
             }
           }
+        },
+        "saisie_parent": {
+          "description": "Texte non publié : le parent tape la poésie sur la tablette (stockée sur l'appareil uniquement). Pour un texte protégé fourni par la classe.",
+          "const": true
         }
-      }
+      },
+      "anyOf": [
+        {
+          "required": [
+            "strophes"
+          ]
+        },
+        {
+          "required": [
+            "saisie_parent"
+          ]
+        }
+      ]
     },
     "b_frise": {
       "allOf": [

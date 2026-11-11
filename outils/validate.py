@@ -337,6 +337,9 @@ def validate(d):
         rb = blocs.get(d["recitation"]["bloc"])
         if not rb or rb["type"] != "poeme":
             E("recitation", "doit pointer vers un bloc de type poeme")
+    for b in (b for b in d["lecon"]["blocs"] if b["type"] == "poeme"):
+        if b.get("saisie_parent") and "strophes" in b:
+            E(f"bloc {b['id']}", "saisie_parent : le texte est tapé sur la tablette, ne pas fournir de strophes")
 
     # balisage + conventions d'écriture
     declared = set(d["styles"])
@@ -359,7 +362,7 @@ def validate(d):
         if re.search(r"\b\d+\.\d+\b", no_frac):
             E(path, "point décimal : utiliser la virgule (convention française)")
     for b in (b for b in d["lecon"]["blocs"] if b["type"] == "poeme"):
-        for st in b["strophes"]:
+        for st in b.get("strophes", []):
             for vers in st:
                 if "{" in vers:
                     E(f"bloc {b['id']}", "pas de balisage dans un poème")
@@ -412,8 +415,11 @@ def validate(d):
     return errors, warnings
 
 
+VERS_SAISIE_PARENT = 16  # estimation de durée quand le texte est tapé sur la tablette
+
+
 def duree_s(d):
-    vers = sum(len(v_) for b in d["lecon"]["blocs"] if b["type"] == "poeme" for v_ in b["strophes"])
+    vers = sum(len(v_) for b in d["lecon"]["blocs"] if b["type"] == "poeme" for v_ in (b.get("strophes") or [[""] * VERS_SAISIE_PARENT]))
     return (len(d["lecon"]["blocs"]) * DUREES["bloc"] + len(d.get("cartes", [])) * DUREES["carte"]
             + len(d.get("calculs", [])) * DUREES["calcul"]
             + len(d.get("quiz", [])) * DUREES["quiz"] + len(d.get("oral", [])) * DUREES["oral"]
