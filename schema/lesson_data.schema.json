@@ -408,7 +408,10 @@
               }
             }
           }
-        }
+        },
+        "required": [
+          "alertes_lecture"
+        ]
       },
       "then": {
         "properties": {

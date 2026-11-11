@@ -57,6 +57,12 @@ MUT = [
  (M, "image de question non déclarée", lambda d: d["quiz"][2].update(image="img7")),
  (P, "récitation vers un bloc non poème", lambda d: (d["lecon"]["blocs"].append({"id": "b2", "type": "paragraphe", "source": "p1", "texte": "x"}), d["recitation"].update(bloc="b2"))),
 ]
+# cas normal en v2 : une leçon rédigée par Claude n'a pas de liste d'alertes
+sans_alertes = copy.deepcopy(G); sans_alertes.pop("alertes_lecture", None); sans_alertes["meta"].pop("sources", None)
+[b.pop("source", None) for b in sans_alertes["lecon"]["blocs"]]
+e, _ = validate(sans_alertes); ok &= not e
+print(("OK   " if not e else "KO   ") + "leçon sans alertes ni sources (cas normal en v2)", *e, sep="\n     ")
+
 print("\nMutations (doivent être rejetées) :")
 for base, name, m in MUT:
     d = copy.deepcopy(base); m(d); e, _ = validate(d); r = bool(e); ok &= r

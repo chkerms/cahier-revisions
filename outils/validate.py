@@ -269,7 +269,7 @@ def validate(d):
         return errors, warnings  # les règles suivantes supposent une structure valide
 
     blocs = {b["id"]: b for b in d["lecon"]["blocs"]}
-    pages = {s["id"] for s in d["meta"]["sources"]}
+    pages = {s["id"] for s in d["meta"].get("sources", [])}
     images = {im["id"]: im for im in d.get("images", [])}
 
     # unicité des identifiants

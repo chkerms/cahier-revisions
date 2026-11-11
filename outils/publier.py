@@ -80,8 +80,14 @@ def main():
     if a.lire:
         if not a.mot_de_passe:
             sys.exit("--lire demande --mot-de-passe")
-        k = C.open_private(json.loads(C.PRIV.read_text()), a.mot_de_passe)
-        print(json.dumps(C.decrypt_lesson(json.loads((LECONS / fname(a.lire)).read_text()), k), ensure_ascii=False, indent=2))
+        f = LECONS / fname(a.lire)
+        if not f.exists():
+            sys.exit(f"Aucune leçon publiée avec l'id « {a.lire} ».")
+        try:
+            k = C.open_private(json.loads(C.PRIV.read_text()), a.mot_de_passe)
+        except Exception:
+            sys.exit("Mot de passe incorrect.")
+        print(json.dumps(C.decrypt_lesson(json.loads(f.read_text()), k), ensure_ascii=False, indent=2))
         return
     if a.supprimer:
         f = fname(a.supprimer)
