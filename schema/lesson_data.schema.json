@@ -1,0 +1,1209 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "lesson_data.schema.json",
+  "title": "LESSON_DATA v2.0 (cahier-revisions)",
+  "description": "Leçon rédigée par Claude (contenu original aligné sur la classe). Le lecteur est l'app cahier-revisions. Règles hors schéma : outils/validate.py.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "meta",
+    "styles",
+    "lecon",
+    "parcours"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "2.0"
+    },
+    "meta": {
+      "$ref": "#/$defs/meta"
+    },
+    "styles": {
+      "description": "Code couleur de l'enseignant(e), relevé sur la photo. Clés c1..c6, référencées dans le texte par {c1:mot}.",
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^c[1-6]$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/style"
+      }
+    },
+    "images": {
+      "description": "Illustrations : SVG original (cas normal) ou recadrage d'une photo du parent (seulement pour le travail de l'enfant lui-même, jamais un support d'éditeur).",
+      "type": "array",
+      "maxItems": 3,
+      "items": {
+        "$ref": "#/$defs/image"
+      }
+    },
+    "lecon": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "blocs"
+      ],
+      "properties": {
+        "blocs": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 20,
+          "items": {
+            "$ref": "#/$defs/bloc"
+          }
+        }
+      }
+    },
+    "cartes": {
+      "type": "array",
+      "minItems": 5,
+      "maxItems": 12,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "recto",
+          "verso",
+          "ref"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^k[0-9]+$"
+          },
+          "recto": {
+            "$ref": "#/$defs/enonce_court"
+          },
+          "verso": {
+            "$ref": "#/$defs/enonce_court"
+          },
+          "ref": {
+            "$ref": "#/$defs/refs"
+          },
+          "image": {
+            "type": "string",
+            "pattern": "^img[0-9]+$",
+            "description": "Image affichée au recto de la carte, sans sa légende."
+          }
+        }
+      },
+      "description": "5 à 8 cartes ; jusqu'à 12 si meta.type_lecon = liste_a_memoriser."
+    },
+    "quiz": {
+      "type": "array",
+      "minItems": 5,
+      "maxItems": 5,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "question",
+          "reponse",
+          "distracteurs",
+          "indice",
+          "ref"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^q[0-9]+$"
+          },
+          "question": {
+            "$ref": "#/$defs/enonce_court"
+          },
+          "reponse": {
+            "$ref": "#/$defs/enonce_choix"
+          },
+          "distracteurs": {
+            "description": "Exactement 2. Chaque distracteur doit apparaître mot pour mot dans le texte de la leçon (contrôlé par validate.py). La bonne réponse est stockée à part : elle figure toujours parmi les 3 choix. Le template mélange l'ordre.",
+            "type": "array",
+            "minItems": 2,
+            "maxItems": 2,
+            "items": {
+              "$ref": "#/$defs/enonce_choix"
+            }
+          },
+          "indice": {
+            "description": "Pointe vers un bloc de la leçon que le template ré-affiche. Pas de texte d'indice inventé.",
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "bloc"
+            ],
+            "properties": {
+              "bloc": {
+                "$ref": "#/$defs/bloc_id"
+              },
+              "aide": {
+                "type": "string",
+                "maxLength": 80
+              }
+            }
+          },
+          "ref": {
+            "$ref": "#/$defs/refs"
+          },
+          "image": {
+            "type": "string",
+            "pattern": "^img[0-9]+$",
+            "description": "Image (recadrage de la photo) affichée avec la question, sans sa légende. Obligatoire si la question s'appuie sur un schéma."
+          }
+        }
+      }
+    },
+    "recitation": {
+      "description": "Pour les poésies : masquage progressif mot à mot, calculé par le template à partir du bloc poeme.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "bloc",
+        "unite"
+      ],
+      "properties": {
+        "bloc": {
+          "$ref": "#/$defs/bloc_id"
+        },
+        "unite": {
+          "enum": [
+            "vers",
+            "strophe"
+          ]
+        }
+      }
+    },
+    "oral": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 2,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "question",
+          "points_cles",
+          "ref"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^o[0-9]+$"
+          },
+          "question": {
+            "$ref": "#/$defs/enonce_court"
+          },
+          "points_cles": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 4,
+            "items": {
+              "$ref": "#/$defs/texte",
+              "maxLength": 120
+            }
+          },
+          "ref": {
+            "$ref": "#/$defs/refs"
+          },
+          "image": {
+            "type": "string",
+            "pattern": "^img[0-9]+$",
+            "description": "Image (recadrage de la photo) affichée avec la question, sans sa légende. Obligatoire si la question s'appuie sur un schéma."
+          }
+        }
+      }
+    },
+    "parcours": {
+      "description": "Étapes affichées, dans l'ordre. Leçon classique : lecon, cartes, quiz, oral. Poésie : lecon, recitation, oral.",
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "prefixItems": [
+        {
+          "const": "lecon"
+        }
+      ],
+      "items": {
+        "enum": [
+          "lecon",
+          "cartes",
+          "quiz",
+          "calculs",
+          "recitation",
+          "oral"
+        ]
+      }
+    },
+    "alertes_lecture": {
+      "description": "Doutes de lecture sur les photos de référence fournies par le parent. Restitués dans le chat. Une alerte bloquante interdit la publication.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "lu",
+          "gravite",
+          "localisation"
+        ],
+        "properties": {
+          "bloc": {
+            "$ref": "#/$defs/bloc_id"
+          },
+          "lu": {
+            "type": "string"
+          },
+          "alternatives": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "gravite": {
+            "enum": [
+              "bloquante",
+              "mineure"
+            ]
+          },
+          "localisation": {
+            "type": "string",
+            "maxLength": 120
+          }
+        }
+      }
+    },
+    "calculs": {
+      "description": "Exercices à réponse numérique, saisie au pavé numérique à l'écran.",
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 10,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "consigne",
+          "reponse",
+          "ref"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^n[0-9]+$"
+          },
+          "consigne": {
+            "$ref": "#/$defs/enonce_court"
+          },
+          "expression": {
+            "type": "string",
+            "pattern": "^[0-9 ,+\\-−×x:÷()]+$",
+            "maxLength": 60,
+            "description": "Calcul que validate.py évalue pour vérifier la réponse (ex. 347 + 125, 4 × 25, 84 : 4)."
+          },
+          "reponse": {
+            "type": "string",
+            "pattern": "^[0-9]{1,7}(,[0-9]{1,3})?$"
+          },
+          "image": {
+            "type": "string",
+            "pattern": "^img[0-9]+$"
+          },
+          "ref": {
+            "$ref": "#/$defs/refs"
+          }
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "parcours": {
+            "contains": {
+              "const": "cartes"
+            }
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "cartes"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "parcours": {
+            "contains": {
+              "const": "quiz"
+            }
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "quiz"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "parcours": {
+            "contains": {
+              "const": "calculs"
+            }
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "calculs"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "parcours": {
+            "contains": {
+              "const": "oral"
+            }
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "oral"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "parcours": {
+            "contains": {
+              "const": "recitation"
+            }
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "recitation"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "alertes_lecture": {
+            "contains": {
+              "properties": {
+                "gravite": {
+                  "const": "bloquante"
+                }
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "meta": {
+            "properties": {
+              "statut": {
+                "const": "en_attente_validation"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "meta": {
+            "properties": {
+              "type_lecon": {
+                "not": {
+                  "const": "liste_a_memoriser"
+                }
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "cartes": {
+            "maxItems": 8
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "texte": {
+      "description": "Texte riche. Balisage inline fermé : {c1:mot} style du cahier, {mc:mot} mot-clé, {frac:3/4} fraction empilée, {lang-en:hello} changement de langue pour la voix. Pas d'imbrication. Accolade littérale : \\{.",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 300
+    },
+    "enonce_court": {
+      "description": "Texte affiché + prononciation optionnelle si la synthèse vocale lirait mal (homographes, nombres, sigles).",
+      "oneOf": [
+        {
+          "$ref": "#/$defs/texte",
+          "maxLength": 140
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "texte",
+            "oral"
+          ],
+          "properties": {
+            "texte": {
+              "$ref": "#/$defs/texte",
+              "maxLength": 140
+            },
+            "oral": {
+              "type": "string",
+              "maxLength": 200
+            }
+          }
+        }
+      ]
+    },
+    "enonce_choix": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/texte",
+          "maxLength": 60
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "texte",
+            "oral"
+          ],
+          "properties": {
+            "texte": {
+              "$ref": "#/$defs/texte",
+              "maxLength": 60
+            },
+            "oral": {
+              "type": "string",
+              "maxLength": 100
+            }
+          }
+        }
+      ]
+    },
+    "bloc_id": {
+      "type": "string",
+      "pattern": "^b[0-9]+$"
+    },
+    "refs": {
+      "description": "Blocs de la leçon qui justifient l'item (ancrage).",
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/bloc_id"
+      }
+    },
+    "page_id": {
+      "type": "string",
+      "pattern": "^p[0-9]+$"
+    },
+    "meta": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "titre",
+        "date",
+        "matiere",
+        "type_lecon",
+        "niveau",
+        "statut"
+      ],
+      "properties": {
+        "titre": {
+          "$ref": "#/$defs/texte",
+          "maxLength": 80
+        },
+        "matiere": {
+          "enum": [
+            "francais",
+            "mathematiques",
+            "questionner_le_monde",
+            "langue_vivante",
+            "emc",
+            "arts",
+            "autre"
+          ]
+        },
+        "domaine": {
+          "type": "string",
+          "maxLength": 40,
+          "description": "Libre : grammaire, conjugaison, numération, le vivant..."
+        },
+        "type_lecon": {
+          "enum": [
+            "notion",
+            "regle",
+            "liste_a_memoriser",
+            "poesie",
+            "procedure",
+            "chronologie",
+            "schema"
+          ]
+        },
+        "niveau": {
+          "enum": [
+            "CP",
+            "CE1",
+            "CE2",
+            "CM1",
+            "CM2"
+          ]
+        },
+        "sources": {
+          "type": "array",
+          "minItems": 0,
+          "maxItems": 4,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "description"
+            ],
+            "properties": {
+              "id": {
+                "$ref": "#/$defs/page_id"
+              },
+              "description": {
+                "type": "string",
+                "maxLength": 80
+              }
+            }
+          },
+          "description": "Supports de référence fournis par le parent (photos). Ils guident la notion, le vocabulaire et la technique ; ils ne sont jamais recopiés."
+        },
+        "complete": {
+          "type": "boolean",
+          "description": "false si la leçon continue hors photo."
+        },
+        "note_incomplet": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "statut": {
+          "enum": [
+            "pret",
+            "en_attente_validation"
+          ]
+        },
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+          "minLength": 3,
+          "maxLength": 60,
+          "description": "Identifiant stable : republier le même id remplace la leçon."
+        },
+        "date": {
+          "type": "string",
+          "pattern": "^20[2-9][0-9]-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$",
+          "description": "Date de la leçon (AAAA-MM-JJ), sert au tri."
+        },
+        "methode": {
+          "enum": [
+            "MHM",
+            "MHF",
+            "autre",
+            "aucune"
+          ]
+        },
+        "periode": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        },
+        "module": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 30
+        }
+      }
+    },
+    "style": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "couleur",
+        "signification"
+      ],
+      "properties": {
+        "couleur": {
+          "description": "Palette fermée : le template mappe vers des teintes à contraste vérifié.",
+          "enum": [
+            "rouge",
+            "bleu",
+            "vert",
+            "noir",
+            "orange",
+            "violet",
+            "rose",
+            "marron",
+            "surligne_jaune",
+            "surligne_vert",
+            "surligne_rose"
+          ]
+        },
+        "souligne": {
+          "type": "boolean"
+        },
+        "encadre": {
+          "type": "boolean"
+        },
+        "gras": {
+          "type": "boolean"
+        },
+        "signification": {
+          "type": "string",
+          "maxLength": 40,
+          "description": "Ce que la couleur code, si visible ou déductible du cahier (ex. verbe). Sinon 'non précisé'."
+        }
+      }
+    },
+    "image": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "id",
+            "svg",
+            "description"
+          ],
+          "properties": {
+            "id": {
+              "type": "string",
+              "pattern": "^img[0-9]+$"
+            },
+            "svg": {
+              "type": "string",
+              "minLength": 20,
+              "maxLength": 30000,
+              "description": "Illustration originale en SVG (viewBox obligatoire, aucun script, aucun lien externe)."
+            },
+            "description": {
+              "type": "string",
+              "maxLength": 120
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "id",
+            "source",
+            "cadrage",
+            "description"
+          ],
+          "properties": {
+            "id": {
+              "type": "string",
+              "pattern": "^img[0-9]+$"
+            },
+            "source": {
+              "$ref": "#/$defs/page_id"
+            },
+            "cadrage": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "x",
+                "y",
+                "l",
+                "h"
+              ],
+              "properties": {
+                "x": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "y": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "l": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "h": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                }
+              }
+            },
+            "data": {
+              "type": "string",
+              "pattern": "^data:image/jpeg;base64,",
+              "description": "Ajouté par publier.py."
+            },
+            "description": {
+              "type": "string",
+              "maxLength": 120
+            }
+          }
+        }
+      ]
+    },
+    "bloc_base": {
+      "type": "object",
+      "required": [
+        "id",
+        "type"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/bloc_id"
+        },
+        "source": {
+          "$ref": "#/$defs/page_id"
+        },
+        "oral": {
+          "type": "string",
+          "maxLength": 400
+        }
+      }
+    },
+    "bloc": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/b_titre"
+        },
+        {
+          "$ref": "#/$defs/b_paragraphe"
+        },
+        {
+          "$ref": "#/$defs/b_definition"
+        },
+        {
+          "$ref": "#/$defs/b_regle"
+        },
+        {
+          "$ref": "#/$defs/b_remarque"
+        },
+        {
+          "$ref": "#/$defs/b_exemples"
+        },
+        {
+          "$ref": "#/$defs/b_liste"
+        },
+        {
+          "$ref": "#/$defs/b_tableau"
+        },
+        {
+          "$ref": "#/$defs/b_operation"
+        },
+        {
+          "$ref": "#/$defs/b_poeme"
+        },
+        {
+          "$ref": "#/$defs/b_frise"
+        },
+        {
+          "$ref": "#/$defs/b_schema"
+        }
+      ]
+    },
+    "b_titre": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/bloc_base"
+        }
+      ],
+      "unevaluatedProperties": false,
+      "required": [
+        "texte"
+      ],
+      "properties": {
+        "type": {
+          "const": "titre"
+        },
+        "texte": {
+          "$ref": "#/$defs/texte",
+          "maxLength": 80
+        }
+      }
+    },
+    "b_paragraphe": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/bloc_base"
+        }
+      ],
+      "unevaluatedProperties": false,
+      "required": [
+        "texte"
+      ],
+      "properties": {
+        "type": {
+          "const": "paragraphe"
+        },
+        "texte": {
+          "$ref": "#/$defs/texte",
+          "maxLength": 220
+        }
+      }
+    },
+    "b_definition": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/bloc_base"
+        }
+      ],
+      "unevaluatedProperties": false,
+      "required": [
+        "terme",
+        "texte"
+      ],
+      "properties": {
+        "type": {
+          "const": "definition"
+        },
+        "terme": {
+          "$ref": "#/$defs/texte",
+          "maxLength": 40
+        },
+        "texte": {
+          "$ref": "#/$defs/texte",
+          "maxLength": 220
+        }
+      }
+    },
+    "b_regle": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/bloc_base"
+        }
+      ],
+      "unevaluatedProperties": false,
+      "required": [
+        "texte"
+      ],
+      "properties": {
+        "type": {
+          "const": "regle"
+        },
+        "texte": {
+          "$ref": "#/$defs/texte",
+          "maxLength": 220
+        }
+      }
+    },
+    "b_remarque": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/bloc_base"
+        }
+      ],
+      "unevaluatedProperties": false,
+      "required": [
+        "texte"
+      ],
+      "properties": {
+        "type": {
+          "const": "remarque"
+        },
+        "texte": {
+          "$ref": "#/$defs/texte",
+          "maxLength": 160
+        }
+      }
+    },
+    "b_exemples": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/bloc_base"
+        }
+      ],
+      "unevaluatedProperties": false,
+      "required": [
+        "items"
+      ],
+      "properties": {
+        "type": {
+          "const": "exemples"
+        },
+        "items": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 6,
+          "items": {
+            "$ref": "#/$defs/enonce_court"
+          }
+        }
+      }
+    },
+    "b_liste": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/bloc_base"
+        }
+      ],
+      "unevaluatedProperties": false,
+      "required": [
+        "items",
+        "ordonnee"
+      ],
+      "properties": {
+        "type": {
+          "const": "liste"
+        },
+        "titre": {
+          "$ref": "#/$defs/texte",
+          "maxLength": 60
+        },
+        "ordonnee": {
+          "type": "boolean"
+        },
+        "items": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 15,
+          "items": {
+            "$ref": "#/$defs/enonce_court"
+          }
+        }
+      }
+    },
+    "b_tableau": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/bloc_base"
+        }
+      ],
+      "unevaluatedProperties": false,
+      "required": [
+        "entetes",
+        "lignes"
+      ],
+      "properties": {
+        "type": {
+          "const": "tableau"
+        },
+        "titre": {
+          "$ref": "#/$defs/texte",
+          "maxLength": 60
+        },
+        "entetes": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 4,
+          "items": {
+            "$ref": "#/$defs/texte",
+            "maxLength": 30
+          }
+        },
+        "lignes": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 8,
+          "items": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 4,
+            "items": {
+              "$ref": "#/$defs/texte",
+              "maxLength": 40
+            }
+          }
+        }
+      }
+    },
+    "b_operation": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/bloc_base"
+        }
+      ],
+      "unevaluatedProperties": false,
+      "required": [
+        "operation",
+        "termes",
+        "resultat"
+      ],
+      "properties": {
+        "type": {
+          "const": "operation_posee"
+        },
+        "operation": {
+          "enum": [
+            "addition",
+            "soustraction",
+            "multiplication"
+          ]
+        },
+        "termes": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 4,
+          "items": {
+            "type": "string",
+            "pattern": "^[0-9]{1,7}(,[0-9]{1,3})?$"
+          }
+        },
+        "resultat": {
+          "type": "string",
+          "pattern": "^[0-9]{1,8}(,[0-9]{1,3})?$"
+        },
+        "retenues": {
+          "description": "Une case par colonne, de gauche à droite, '' si aucune. Uniquement si visibles sur le cahier.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[0-9]?$"
+          }
+        }
+      }
+    },
+    "b_poeme": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/bloc_base"
+        }
+      ],
+      "unevaluatedProperties": false,
+      "required": [
+        "titre",
+        "strophes"
+      ],
+      "properties": {
+        "type": {
+          "const": "poeme"
+        },
+        "titre": {
+          "type": "string",
+          "maxLength": 80
+        },
+        "auteur": {
+          "type": "string",
+          "maxLength": 60
+        },
+        "strophes": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 6,
+          "items": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 8,
+            "items": {
+              "type": "string",
+              "maxLength": 80
+            }
+          }
+        }
+      }
+    },
+    "b_frise": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/bloc_base"
+        }
+      ],
+      "unevaluatedProperties": false,
+      "required": [
+        "evenements"
+      ],
+      "properties": {
+        "type": {
+          "const": "frise"
+        },
+        "evenements": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 8,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "repere",
+              "libelle"
+            ],
+            "properties": {
+              "repere": {
+                "type": "string",
+                "maxLength": 30
+              },
+              "libelle": {
+                "$ref": "#/$defs/texte",
+                "maxLength": 80
+              }
+            }
+          }
+        }
+      }
+    },
+    "b_schema": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/bloc_base"
+        }
+      ],
+      "unevaluatedProperties": false,
+      "required": [
+        "image",
+        "legendes"
+      ],
+      "properties": {
+        "type": {
+          "const": "schema_legende"
+        },
+        "image": {
+          "type": "string",
+          "pattern": "^img[0-9]+$"
+        },
+        "legendes": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 10,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "repere",
+              "libelle"
+            ],
+            "properties": {
+              "repere": {
+                "type": "string",
+                "maxLength": 4,
+                "description": "Numéro ou lettre visible sur le schéma."
+              },
+              "libelle": {
+                "$ref": "#/$defs/texte",
+                "maxLength": 40
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

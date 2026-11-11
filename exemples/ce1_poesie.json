@@ -1,0 +1,74 @@
+{
+  "schema_version": "2.0",
+  "meta": {
+    "id": "poesie-la-cigale-et-la-fourmi",
+    "titre": "La Cigale et la Fourmi (début)",
+    "date": "2026-11-06",
+    "methode": "aucune",
+    "matiere": "francais",
+    "domaine": "poésie",
+    "type_lecon": "poesie",
+    "niveau": "CE1",
+    "sources": [
+      {
+        "id": "p1",
+        "description": "Cahier de poésie, page collée"
+      }
+    ],
+    "complete": false,
+    "note_incomplet": "Seuls les 4 premiers vers sont à apprendre (consigne au crayon).",
+    "statut": "en_attente_validation"
+  },
+  "styles": {},
+  "lecon": {
+    "blocs": [
+      {
+        "id": "b1",
+        "type": "poeme",
+        "source": "p1",
+        "titre": "La Cigale et la Fourmi",
+        "auteur": "Jean de La Fontaine",
+        "strophes": [
+          [
+            "La Cigale, ayant chanté",
+            "Tout l'été,",
+            "Se trouva fort dépourvue",
+            "Quand la bise fut venue."
+          ]
+        ]
+      }
+    ]
+  },
+  "recitation": {
+    "bloc": "b1",
+    "unite": "vers"
+  },
+  "oral": [
+    {
+      "id": "o1",
+      "question": "Récite les quatre premiers vers à ton parent.",
+      "points_cles": [
+        "Les 4 vers dans l'ordre, sans oubli."
+      ],
+      "ref": [
+        "b1"
+      ]
+    }
+  ],
+  "parcours": [
+    "lecon",
+    "recitation",
+    "oral"
+  ],
+  "alertes_lecture": [
+    {
+      "bloc": "b1",
+      "lu": "4 premiers vers",
+      "alternatives": [
+        "8 premiers vers"
+      ],
+      "gravite": "bloquante",
+      "localisation": "Annotation crayon en marge, chiffre peu lisible"
+    }
+  ]
+}

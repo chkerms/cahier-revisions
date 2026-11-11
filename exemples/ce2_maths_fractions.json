@@ -1,0 +1,257 @@
+{
+  "schema_version": "2.0",
+  "meta": {
+    "id": "maths-les-fractions",
+    "titre": "Les fractions",
+    "date": "2026-11-10",
+    "methode": "MHM",
+    "periode": 2,
+    "matiere": "mathematiques",
+    "domaine": "nombres",
+    "type_lecon": "notion",
+    "niveau": "CE2",
+    "sources": [
+      {
+        "id": "p1",
+        "description": "Photo du cahier de maths (référence de vocabulaire)"
+      }
+    ],
+    "complete": true,
+    "statut": "pret"
+  },
+  "styles": {
+    "c1": {
+      "couleur": "bleu",
+      "encadre": true,
+      "signification": "à retenir"
+    }
+  },
+  "images": [
+    {
+      "id": "img1",
+      "svg": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 240 200\"><g stroke=\"#5a3a1a\" stroke-width=\"4\" stroke-linejoin=\"round\"><path d=\"M110 100 L110 20 A80 80 0 0 0 30 100 Z\" fill=\"#f4a261\"/><path d=\"M110 100 L30 100 A80 80 0 0 0 110 180 Z\" fill=\"#f4a261\"/><path d=\"M110 100 L110 180 A80 80 0 0 0 190 100 Z\" fill=\"#f4a261\"/><path d=\"M110 100 L190 100 A80 80 0 0 0 110 20 Z\" fill=\"#fffaf0\"/></g><circle cx=\"215\" cy=\"30\" r=\"16\" fill=\"#2f6fed\"/><text x=\"215\" y=\"37\" font-size=\"20\" font-family=\"sans-serif\" font-weight=\"bold\" fill=\"#fff\" text-anchor=\"middle\">1</text></svg>",
+      "description": "Une pizza coupée en 4 parts égales, 3 parts sont coloriées."
+    }
+  ],
+  "lecon": {
+    "blocs": [
+      {
+        "id": "b1",
+        "type": "titre",
+        "texte": "Les fractions"
+      },
+      {
+        "id": "b2",
+        "type": "regle",
+        "texte": "{c1:Le dénominateur} (en bas) dit en combien de parts égales on partage. {c1:Le numérateur} (en haut) dit combien de parts on prend."
+      },
+      {
+        "id": "b3",
+        "type": "schema_legende",
+        "image": "img1",
+        "legendes": [
+          {
+            "repere": "1",
+            "libelle": "{frac:3/4} de la pizza"
+          }
+        ]
+      },
+      {
+        "id": "b4",
+        "type": "exemples",
+        "items": [
+          "{frac:1/2} se lit un demi",
+          "{frac:1/4} se lit un quart",
+          "{frac:2/3} se lit deux tiers"
+        ]
+      },
+      {
+        "id": "b5",
+        "type": "operation_posee",
+        "operation": "addition",
+        "termes": [
+          "347",
+          "125"
+        ],
+        "resultat": "472",
+        "retenues": [
+          "",
+          "1",
+          ""
+        ]
+      }
+    ]
+  },
+  "cartes": [
+    {
+      "id": "k1",
+      "recto": "Que dit le dénominateur ?",
+      "verso": "En combien de parts égales on partage.",
+      "ref": [
+        "b2"
+      ]
+    },
+    {
+      "id": "k2",
+      "recto": "Que dit le numérateur ?",
+      "verso": "Combien de parts on prend.",
+      "ref": [
+        "b2"
+      ]
+    },
+    {
+      "id": "k3",
+      "recto": "Comment se lit {frac:1/2} ?",
+      "verso": "un demi",
+      "ref": [
+        "b4"
+      ]
+    },
+    {
+      "id": "k4",
+      "recto": "Comment se lit {frac:1/4} ?",
+      "verso": "un quart",
+      "ref": [
+        "b4"
+      ]
+    },
+    {
+      "id": "k5",
+      "recto": "Comment se lit {frac:2/3} ?",
+      "verso": "deux tiers",
+      "ref": [
+        "b4"
+      ]
+    }
+  ],
+  "quiz": [
+    {
+      "id": "q1",
+      "question": "Dans {frac:3/4}, quel est le dénominateur ?",
+      "reponse": "4",
+      "distracteurs": [
+        "3",
+        "2"
+      ],
+      "indice": {
+        "bloc": "b2"
+      },
+      "ref": [
+        "b2"
+      ]
+    },
+    {
+      "id": "q2",
+      "question": "Quelle fraction se lit « un quart » ?",
+      "reponse": "{frac:1/4}",
+      "distracteurs": [
+        "{frac:1/2}",
+        "{frac:2/3}"
+      ],
+      "indice": {
+        "bloc": "b4"
+      },
+      "ref": [
+        "b4"
+      ]
+    },
+    {
+      "id": "q3",
+      "question": "Quelle part de la pizza est coloriée ?",
+      "image": "img1",
+      "reponse": "{frac:3/4}",
+      "distracteurs": [
+        "{frac:1/4}",
+        "{frac:1/2}"
+      ],
+      "indice": {
+        "bloc": "b3"
+      },
+      "ref": [
+        "b3"
+      ]
+    },
+    {
+      "id": "q4",
+      "question": "Comment se lit {frac:1/2} ?",
+      "reponse": "un demi",
+      "distracteurs": [
+        "un quart",
+        "deux tiers"
+      ],
+      "indice": {
+        "bloc": "b4"
+      },
+      "ref": [
+        "b4"
+      ]
+    },
+    {
+      "id": "q5",
+      "question": "Combien font 347 + 125 ?",
+      "reponse": "472",
+      "distracteurs": [
+        "347",
+        "125"
+      ],
+      "indice": {
+        "bloc": "b5"
+      },
+      "ref": [
+        "b5"
+      ]
+    }
+  ],
+  "oral": [
+    {
+      "id": "o1",
+      "question": "Explique ce que veut dire {frac:3/4} avec la pizza.",
+      "image": "img1",
+      "points_cles": [
+        "On partage la pizza en 4 parts égales.",
+        "On en prend 3."
+      ],
+      "ref": [
+        "b2",
+        "b3"
+      ]
+    }
+  ],
+  "parcours": [
+    "lecon",
+    "cartes",
+    "quiz",
+    "calculs",
+    "oral"
+  ],
+  "alertes_lecture": [],
+  "calculs": [
+    {
+      "id": "n1",
+      "consigne": "Combien font 347 + 125 ?",
+      "expression": "347 + 125",
+      "reponse": "472",
+      "ref": [
+        "b5"
+      ]
+    },
+    {
+      "id": "n2",
+      "consigne": "Combien font 258 + 136 ?",
+      "expression": "258 + 136",
+      "reponse": "394",
+      "ref": [
+        "b5"
+      ]
+    },
+    {
+      "id": "n3",
+      "consigne": "La pizza a 4 parts. Combien de parts sont coloriées ?",
+      "reponse": "3",
+      "image": "img1",
+      "ref": [
+        "b3"
+      ]
+    }
+  ]
+}

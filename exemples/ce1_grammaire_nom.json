@@ -1,0 +1,228 @@
+{
+  "schema_version": "2.0",
+  "meta": {
+    "id": "grammaire-le-nom",
+    "titre": "Le nom",
+    "date": "2026-11-09",
+    "methode": "MHF",
+    "periode": 2,
+    "matiere": "francais",
+    "domaine": "grammaire",
+    "type_lecon": "notion",
+    "niveau": "CE1",
+    "sources": [
+      {
+        "id": "p1",
+        "description": "Page du cahier du jour, leçon G3"
+      }
+    ],
+    "complete": true,
+    "statut": "pret"
+  },
+  "styles": {
+    "c1": {
+      "couleur": "rouge",
+      "souligne": true,
+      "signification": "nom"
+    },
+    "c2": {
+      "couleur": "vert",
+      "souligne": true,
+      "signification": "déterminant"
+    }
+  },
+  "lecon": {
+    "blocs": [
+      {
+        "id": "b1",
+        "type": "titre",
+        "source": "p1",
+        "texte": "Le nom"
+      },
+      {
+        "id": "b2",
+        "type": "definition",
+        "source": "p1",
+        "terme": "Le nom",
+        "texte": "Un {c1:nom} sert à nommer une personne, un animal, une chose ou un lieu."
+      },
+      {
+        "id": "b3",
+        "type": "regle",
+        "source": "p1",
+        "texte": "Devant le nom, on peut mettre un {c2:déterminant} : le, la, les, un, une, des."
+      },
+      {
+        "id": "b4",
+        "type": "exemples",
+        "source": "p1",
+        "items": [
+          "{c2:la} {c1:maîtresse}",
+          "{c2:un} {c1:chat}",
+          {
+            "texte": "{c2:les} {c1:fils}",
+            "oral": "les fisse"
+          }
+        ]
+      },
+      {
+        "id": "b5",
+        "type": "remarque",
+        "source": "p1",
+        "texte": "Les noms de personnes et de villes prennent une {mc:majuscule} : Paul, Lille."
+      }
+    ]
+  },
+  "cartes": [
+    {
+      "id": "k1",
+      "recto": "À quoi sert un nom ?",
+      "verso": "À nommer une personne, un animal, une chose ou un lieu.",
+      "ref": [
+        "b2"
+      ]
+    },
+    {
+      "id": "k2",
+      "recto": "Que met-on devant le nom ?",
+      "verso": "Un déterminant.",
+      "ref": [
+        "b3"
+      ]
+    },
+    {
+      "id": "k3",
+      "recto": "Cite 3 déterminants.",
+      "verso": "le, la, les, un, une, des",
+      "ref": [
+        "b3"
+      ]
+    },
+    {
+      "id": "k4",
+      "recto": "Dans « un chat », où est le nom ?",
+      "verso": "{c1:chat}",
+      "ref": [
+        "b4"
+      ]
+    },
+    {
+      "id": "k5",
+      "recto": "Quels noms prennent une majuscule ?",
+      "verso": "Les noms de personnes et de villes.",
+      "ref": [
+        "b5"
+      ]
+    }
+  ],
+  "quiz": [
+    {
+      "id": "q1",
+      "question": "Quel mot est un nom ?",
+      "reponse": "chat",
+      "distracteurs": [
+        "un",
+        "la"
+      ],
+      "indice": {
+        "bloc": "b2"
+      },
+      "ref": [
+        "b2",
+        "b4"
+      ]
+    },
+    {
+      "id": "q2",
+      "question": "Quel mot est un déterminant ?",
+      "reponse": "une",
+      "distracteurs": [
+        "chat",
+        "Lille"
+      ],
+      "indice": {
+        "bloc": "b3"
+      },
+      "ref": [
+        "b3"
+      ]
+    },
+    {
+      "id": "q3",
+      "question": "Dans « la maîtresse », quel est le nom ?",
+      "reponse": "maîtresse",
+      "distracteurs": [
+        "la",
+        "un"
+      ],
+      "indice": {
+        "bloc": "b4"
+      },
+      "ref": [
+        "b4"
+      ]
+    },
+    {
+      "id": "q4",
+      "question": "Quel nom prend une majuscule ?",
+      "reponse": "Paul",
+      "distracteurs": [
+        "chat",
+        "maîtresse"
+      ],
+      "indice": {
+        "bloc": "b5",
+        "aide": "Relis la remarque."
+      },
+      "ref": [
+        "b5"
+      ]
+    },
+    {
+      "id": "q5",
+      "question": "Que met-on devant un nom ?",
+      "reponse": "un déterminant",
+      "distracteurs": [
+        "une majuscule",
+        "un nom"
+      ],
+      "indice": {
+        "bloc": "b3"
+      },
+      "ref": [
+        "b3"
+      ]
+    }
+  ],
+  "oral": [
+    {
+      "id": "o1",
+      "question": "Explique ce qu'est un nom et donne deux exemples.",
+      "points_cles": [
+        "Il nomme une personne, un animal, une chose ou un lieu.",
+        "Exemples : la maîtresse, un chat."
+      ],
+      "ref": [
+        "b2",
+        "b4"
+      ]
+    }
+  ],
+  "parcours": [
+    "lecon",
+    "cartes",
+    "quiz",
+    "oral"
+  ],
+  "alertes_lecture": [
+    {
+      "bloc": "b4",
+      "lu": "les fils",
+      "alternatives": [
+        "les fies"
+      ],
+      "gravite": "mineure",
+      "localisation": "3e exemple, mot partiellement raturé"
+    }
+  ]
+}

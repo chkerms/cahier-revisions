@@ -1,0 +1,8 @@
+__pycache__/
+*.src.json
+brouillons/
+tests/captures/
+*.jpg
+*.jpeg
+*.png
+!icons/*.png
