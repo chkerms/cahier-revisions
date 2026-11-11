@@ -1,7 +1,7 @@
 /* Cahier de révisions : lecteur de leçons chiffrées. Aucune dépendance externe. */
 "use strict";
 (function () {
-var VERSION = "1.1.0";
+var VERSION = "1.1.1";
 var app = document.getElementById("app");
 var nextBar = document.getElementById("next");
 var D = null, IMG = {}, LESSONS = [], FILTRE = "tout";
@@ -85,7 +85,8 @@ function loadLessons(key) {
     var all = {}, list = r[0].filter(Boolean).concat(r[1].map(function (l) { l._importee = true; return l; }));
     list.forEach(function (l) { if (l && l.meta && l.meta.id) all[l.meta.id] = l; });
     LESSONS = Object.keys(all).map(function (k) { return all[k]; })
-      .sort(function (a, b) { return a.meta.date < b.meta.date ? 1 : a.meta.date > b.meta.date ? -1 : 0; });
+      .sort(function (a, b) { return a.meta.date < b.meta.date ? 1 : a.meta.date > b.meta.date ? -1 :
+        plain(a.meta.titre).localeCompare(plain(b.meta.titre), "fr", { numeric: true }); });
     return { total: LESSONS.length, illisibles: bad };
   });
 }
@@ -757,7 +758,8 @@ function renderHome(info) {
     h("p", { text: LESSONS.length ? "Pas de leçon dans cette matière." : "Pas encore de leçon. Elles arriveront bientôt !" })));
   shown.forEach(function (l) {
     var m = MATIERES[l.meta.matiere] || MATIERES.autre, p = store.get(l.meta.id), badges = [];
-    if (l.meta.methode && l.meta.methode !== "aucune" && l.meta.methode !== "autre") badges.push(l.meta.methode + (l.meta.periode ? " · P" + l.meta.periode : ""));
+    var aMethode = l.meta.methode && l.meta.methode !== "aucune" && l.meta.methode !== "autre";
+    if (aMethode || l.meta.periode) badges.push((aMethode ? l.meta.methode : "") + (aMethode && l.meta.periode ? " · " : "") + (l.meta.periode ? "P" + l.meta.periode : ""));
     var etat = !p.ouvert ? h("span", { class: "nouveau", text: "Nouveau ✨" })
       : h("span", null, p.fini ? "✓ Fini · ⭐ " + (p.best || 0) : "En cours", (p.demain && p.demain.length) ? "  🌙 " + p.demain.length + " à revoir" : "");
     list.appendChild(h("button", { class: "lecon-card", type: "button", "data-id": l.meta.id, onclick: function () { openLesson(l); } },
