@@ -274,7 +274,7 @@ def validate(d):
 
     # unicité des identifiants
     seen = {}
-    for coll in ("cartes", "quiz", "calculs", "oral", "images"):
+    for coll in ("cartes", "quiz", "calculs", "oral", "images", "generateurs"):
         for it in d.get(coll, []):
             seen.setdefault(it["id"], []).append(coll)
     for b in d["lecon"]["blocs"]:
@@ -313,7 +313,7 @@ def validate(d):
             if pb:
                 E(f"bloc {b['id']}", pb)
     # une question qui s'appuie sur un schéma doit montrer l'image (sans la légende, qui donnerait la réponse)
-    for coll in ("cartes", "quiz", "calculs", "oral"):
+    for coll in ("cartes", "quiz", "calculs", "oral", "generateurs"):
         for it in d.get(coll, []):
             if "image" in it:
                 used_images.add(it["image"])
@@ -325,7 +325,7 @@ def validate(d):
     for im in images:
         if im not in used_images:
             W(f"image {im}", "déclarée mais non utilisée")
-    for coll in ("cartes", "quiz", "calculs", "oral"):
+    for coll in ("cartes", "quiz", "calculs", "oral", "generateurs"):
         for it in d.get(coll, []):
             for r in it["ref"]:
                 if r not in blocs:
@@ -382,6 +382,12 @@ def validate(d):
         if f" {rep} " not in corpus:
             W(f"quiz {q['id']}", f"bonne réponse « {txt(q['reponse'])} » non trouvée mot pour mot dans la leçon : vérifier qu'elle en découle")
 
+    nb_calculs = len(d.get("calculs", [])) + sum(g["nombre"] for g in d.get("generateurs", []))
+    if "calculs" in d["parcours"] and not 3 <= nb_calculs <= 10:
+        E("calculs", f"{nb_calculs} calculs par séance (fixes + générés) : il en faut 3 à 10")
+    if d.get("generateurs") and "calculs" not in d["parcours"]:
+        W("generateurs", "générateurs sans étape calculs dans le parcours : ils ne seront pas proposés")
+
     # calculs : la réponse est recalculée quand l'expression est fournie
     for c in d.get("calculs", []):
         if "expression" not in c:
@@ -421,7 +427,7 @@ VERS_SAISIE_PARENT = 16  # estimation de durée quand le texte est tapé sur la 
 def duree_s(d):
     vers = sum(len(v_) for b in d["lecon"]["blocs"] if b["type"] == "poeme" for v_ in (b.get("strophes") or [[""] * VERS_SAISIE_PARENT]))
     return (len(d["lecon"]["blocs"]) * DUREES["bloc"] + len(d.get("cartes", [])) * DUREES["carte"]
-            + len(d.get("calculs", [])) * DUREES["calcul"]
+            + (len(d.get("calculs", [])) + sum(g["nombre"] for g in d.get("generateurs", []))) * DUREES["calcul"]
             + len(d.get("quiz", [])) * DUREES["quiz"] + len(d.get("oral", [])) * DUREES["oral"]
             + (vers * DUREES["vers"] * 3 if "recitation" in d["parcours"] else 0))
 

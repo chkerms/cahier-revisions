@@ -15,11 +15,11 @@
 :root{
   --bg:#FFF8EC;--card:#FFFFFF;--ink:#1F2A44;--muted:#5B6478;--line:#E9DFCB;
   --primary:#2F6FED;--primary-ink:#FFFFFF;--ok:#1E8E50;--okbg:#E3F6EA;--soft:#B85C00;--softbg:#FFF1D6;
-  --star:#F4B400;--radius:22px;--tap:64px;
+  --star:#F4B400;--radius:22px;--zoom:.88;--tap:calc(64px * var(--zoom));
   --c-rouge:#C62828;--c-bleu:#1565C0;--c-vert:#2E7D32;--c-noir:#1F2A44;--c-orange:#BF4800;
   --c-violet:#6A1B9A;--c-rose:#C2185B;--c-marron:#6D4C41;
   --h-jaune:#FFE873;--h-vert:#C8F0C0;--h-rose:#FFD0E4;
-  font-size:clamp(20px,1.2vw + 14px,28px);
+  font-size:calc(clamp(20px,1.2vw + 14px,28px) * var(--zoom));
 }
 *{box-sizing:border-box}
 html,body{margin:0;background:var(--bg);color:var(--ink)}
@@ -51,7 +51,7 @@ button:focus-visible{outline:4px solid var(--primary);outline-offset:3px}
 /* cartes de contenu */
 .card{background:var(--card);border-radius:var(--radius);padding:1rem 1.1rem;margin:0 0 1rem;box-shadow:0 3px 0 var(--line);position:relative}
 .card.has-say{padding-right:calc(var(--tap) + 1.1rem)}
-.say{position:absolute;top:.6rem;right:.6rem;width:56px;height:56px;border-radius:16px;background:#EEF3FF;font-size:1.4rem}
+.say{position:absolute;top:.6rem;right:.6rem;width:calc(56px * var(--zoom));height:calc(56px * var(--zoom));border-radius:16px;background:#EEF3FF;font-size:1.4rem}
 .say.inline{position:static;flex:0 0 56px}
 .say.speaking{background:var(--primary);color:#fff}
 .no-tts .say{display:none!important}
@@ -182,18 +182,26 @@ th{background:#F6F1E6}
 .saisie.vide{color:#CFC6B4}
 .saisie.juste{border-color:var(--ok);background:var(--okbg);color:var(--ok)}
 .pad{display:grid;grid-template-columns:repeat(3,1fr);gap:.6rem;max-width:360px;margin:0 auto}
-.padkey{min-height:72px;border-radius:18px;background:var(--card);box-shadow:0 4px 0 var(--line);font-size:1.7rem;font-weight:700}
+.padkey{min-height:calc(72px * var(--zoom));border-radius:18px;background:var(--card);box-shadow:0 4px 0 var(--line);font-size:1.7rem;font-weight:700}
 .padkey:active{transform:translateY(3px);box-shadow:0 1px 0 var(--line)}
 .padkey.del{background:var(--softbg);color:var(--soft)}
 .czone .qimg,.qzone .qimg{max-height:24vh}
 @media (max-width:900px){.steps.many .step .lbl{display:none}.steps.many .step{font-size:1.3rem}}
 .czone .actions{max-width:360px;margin:1rem auto}
+@media (orientation:landscape) and (min-width:1000px){.wrap,.next .btn{max-width:1120px}}
+@media (orientation:landscape) and (min-width:700px){
+  .czone{display:flex;gap:1.4rem;align-items:flex-start}
+  .czone .cgauche{flex:1 1 55%;min-width:0}
+  .czone .cdroite{flex:1 1 45%;position:sticky;top:.5rem}
+  .czone .cdroite .actions{margin:.8rem auto 0}
+}
 @media (max-width:560px){.filtres .lbl2{display:none}}
 </style>
 </head>
 <body>
 <div class="wrap" id="app"></div>
 <div class="next" id="next" hidden></div>
+<script src="generateurs.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

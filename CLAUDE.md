@@ -42,6 +42,7 @@ Pour une poésie, n'utilise que des textes du domaine public. Si le texte n'est 
 - Cartes : 5 à 8. Une notion par carte, réponse avec les mots de la leçon.
 - Quiz : exactement 5 questions, `reponse` + 2 `distracteurs`. Chaque distracteur doit apparaître mot pour mot dans le texte de la leçon (le validateur le vérifie). `indice.bloc` = le bloc à relire. Chaque question se comprend sans la leçon sous les yeux.
 - Calculs : 3 à 10, réponse saisie au pavé numérique (entier ou décimal), avec `expression` dès que c'est un calcul.
+- **Calculs générés** (maths) : préfère `generateurs` aux calculs fixes dès qu'un type existe, pour que l'enfant ait de nouveaux nombres à chaque séance. Types : `decomposition` (`chiffres` 3|4, `forme` somme|produits), `composition` (`chiffres`), `echanges`, `ecrire_chiffres` (`chiffres`, orthographe rectifiée avec tirets), `comparer` (`chiffres`, `sens` grand|petit|mixte), `table` (`tables`, `operation` multiplication|division|mixte), `partage` (`tables`, deux sens de la division), `moitie` (`max`). Total par séance (fixes + générés) : 3 à 10. Un nouveau type se code dans `generateurs.js` et se vérifie dans `tests/test_generateurs.py`.
 - Oral : 1 ou 2 questions ouvertes, `points_cles` que le parent coche.
 - Durée cible : 10 minutes au maximum (le validateur avertit au-delà).
 
@@ -76,6 +77,7 @@ Si le push est impossible (pas d'accès en écriture dans la session), envoie au
 2. Lance les tests :
 ```bash
 python3 -I tests/test_validate.py
+python3 -I tests/test_generateurs.py     # node requis ; pip install num2words pour vérifier les nombres en lettres
 python3 -m http.server 8765 &   # à la racine
 python3 tests/test_app.py http://localhost:8765/ <mot de passe>   # Chrome headless au format tablette Android
 ```

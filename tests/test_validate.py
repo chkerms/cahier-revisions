@@ -65,6 +65,17 @@ sans_alertes = copy.deepcopy(G); sans_alertes.pop("alertes_lecture", None); sans
 e, _ = validate(sans_alertes); ok &= not e
 print(("OK   " if not e else "KO   ") + "leçon sans alertes ni sources (cas normal en v2)", *e, sep="\n     ")
 
+# calculs générés à chaque séance, sans calcul fixe
+gen = copy.deepcopy(M); gen.pop("calculs"); gen["generateurs"] = [{"id": "g1", "type": "table", "nombre": 4, "params": {"tables": [3, 4]}, "ref": ["b2"]}]
+e, _ = validate(gen); ok &= not e
+print(("OK   " if not e else "KO   ") + "calculs générés (générateurs seuls)", *e, sep="\n     ")
+trop = copy.deepcopy(gen); trop["generateurs"].append({"id": "g2", "type": "moitie", "nombre": 6, "ref": ["b2"]}); trop["generateurs"].append({"id": "g3", "type": "moitie", "nombre": 6, "ref": ["b2"]})
+e, _ = validate(trop); ok &= bool(e)
+print(("rejeté    " if e else "ACCEPTÉ ! ") + "plus de 10 calculs par séance")
+inconnu = copy.deepcopy(gen); inconnu["generateurs"][0]["type"] = "racine_carree"
+e, _ = validate(inconnu); ok &= bool(e)
+print(("rejeté    " if e else "ACCEPTÉ ! ") + "type de générateur inconnu")
+
 # poème tapé par le parent sur la tablette : pas de strophes dans la leçon
 saisie = copy.deepcopy(P); saisie["lecon"]["blocs"][0].pop("strophes"); saisie["lecon"]["blocs"][0]["saisie_parent"] = True
 e, _ = validate(saisie); ok &= not e

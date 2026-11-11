@@ -1,13 +1,15 @@
 /* Cahier de révisions : lecteur de leçons chiffrées. Aucune dépendance externe. */
 "use strict";
 (function () {
-var VERSION = "1.1.1";
+var VERSION = "1.2.0";
 var app = document.getElementById("app");
 var nextBar = document.getElementById("next");
 var D = null, IMG = {}, LESSONS = [], FILTRE = "tout";
 
 /* ------------------------------------------------------------ réglages et stockage */
 function reglages() { try { return JSON.parse(localStorage.getItem("reglages") || "{}"); } catch (e) { return {}; } }
+var TAILLES = { petite: 0.78, moyenne: 0.88, grande: 1 };
+function appliquerTaille() { document.documentElement.style.setProperty("--zoom", TAILLES[reglages().taille] || TAILLES.moyenne); }
 function setReglages(o) { var r = reglages(); for (var k in o) r[k] = o[k]; try { localStorage.setItem("reglages", JSON.stringify(r)); } catch (e) {} }
 
 var idb = {
@@ -615,21 +617,24 @@ function renderEnd() {
 /* ------------------------------------------------------------ calculs (pavé numérique) */
 function stepCalculs(main) {
   var ci = 0, first = 0;
+  var CAL = (D.calculs || []).concat(window.GENERATEURS ? window.GENERATEURS.creer(D.generateurs) : []);
   setNext(null);
   function norm(s) { var n = parseFloat(String(s).replace(",", ".")); return isNaN(n) ? null : Math.round(n * 1000); }
   function show() {
     main.querySelectorAll(".czone").forEach(function (n) { n.remove(); });
     var zone = h("div", { class: "czone" }); main.appendChild(zone);
-    setProgress(ci / D.calculs.length);
-    if (ci >= D.calculs.length) {
+    setProgress(ci / CAL.length);
+    if (ci >= CAL.length) {
       zone.appendChild(h("div", { class: "card end" }, h("div", { class: "big", text: "🧮" }),
-        h("p", { text: first + " calcul" + (first > 1 ? "s" : "") + " réussi" + (first > 1 ? "s" : "") + " du premier coup sur " + D.calculs.length + " !" })));
+        h("p", { text: first + " calcul" + (first > 1 ? "s" : "") + " réussi" + (first > 1 ? "s" : "") + " du premier coup sur " + CAL.length + " !" })));
       setProgress(1); setNext(nextLabel(), goNext); return;
     }
-    var c = D.calculs[ci], val = "", tries = 0, done = false;
+    var c = CAL[ci], val = "", tries = 0, done = false;
     var csay = sayBtn(function () { return segOf(c.consigne); });
-    zone.appendChild(h("div", { class: "counter", text: "Calcul " + (ci + 1) + " sur " + D.calculs.length }));
-    zone.appendChild(h("div", { class: "card has-say" }, h("div", { class: "q" }, rich(txt(c.consigne))), itemImg(c), csay));
+    var gauche = h("div", { class: "cgauche" }), droite = h("div", { class: "cdroite" });
+    zone.appendChild(gauche); zone.appendChild(droite);
+    gauche.appendChild(h("div", { class: "counter", text: "Calcul " + (ci + 1) + " sur " + CAL.length }));
+    gauche.appendChild(h("div", { class: "card has-say" }, h("div", { class: "q" }, rich(txt(c.consigne))), itemImg(c), csay));
     var disp = h("div", { class: "saisie", id: "saisie", "aria-live": "polite", text: "?" });
     var fb = h("div", { "aria-live": "polite" });
     function upd() { disp.textContent = val || "?"; disp.classList.toggle("vide", !val); }
@@ -651,7 +656,7 @@ function stepCalculs(main) {
         done = true; disp.classList.add("juste");
         if (tries === 1) { first++; addStar(); }
         fb.appendChild(h("div", { class: "feedback good", text: tries === 1 ? "Bravo ! ⭐" : "Bravo, tu as trouvé ! 👏" }));
-        setNext(ci < D.calculs.length - 1 ? "Calcul suivant ➜" : "Voir mon résultat ➜", function () { ci++; setNext(null); show(); });
+        setNext(ci < CAL.length - 1 ? "Calcul suivant ➜" : "Voir mon résultat ➜", function () { ci++; setNext(null); show(); });
       } else if (tries < 3) {
         val = ""; upd();
         var hb = BLOCS[c.ref[0]];
@@ -660,10 +665,10 @@ function stepCalculs(main) {
       } else {
         done = true;
         fb.appendChild(h("div", { class: "feedback again", text: "La bonne réponse était " + c.reponse + ". On le retravaillera ensemble ! 🌱" }));
-        setNext(ci < D.calculs.length - 1 ? "Calcul suivant ➜" : "Voir mon résultat ➜", function () { ci++; setNext(null); show(); });
+        setNext(ci < CAL.length - 1 ? "Calcul suivant ➜" : "Voir mon résultat ➜", function () { ci++; setNext(null); show(); });
       }
     } });
-    zone.appendChild(disp); zone.appendChild(pad); zone.appendChild(h("div", { class: "actions" }, ok)); zone.appendChild(fb);
+    gauche.appendChild(disp); gauche.appendChild(fb); droite.appendChild(pad); droite.appendChild(h("div", { class: "actions" }, ok));
     if (TTS.auto) TTS.speak(segOf(c.consigne), csay);
   }
   show();
@@ -801,6 +806,12 @@ function renderParent(msg) {
   });
   function act(label, id, fn, cls) { return h("button", { class: "btn " + (cls || ""), type: "button", id: id, text: label, onclick: fn }); }
   app.appendChild(h("header", { class: "top" }, h("h1", { text: "⚙️ Zone parent" })));
+  var taille = reglages().taille || "moyenne";
+  app.appendChild(h("div", { class: "card" }, h("div", { class: "label", text: "Taille du texte" }),
+    h("div", { class: "actions" }, ["petite", "moyenne", "grande"].map(function (k) {
+      return h("button", { class: "btn" + (k === taille ? " primary" : ""), type: "button", "data-taille": k, "aria-pressed": k === taille ? "true" : "false",
+        text: k.charAt(0).toUpperCase() + k.slice(1), onclick: function () { setReglages({ taille: k }); appliquerTaille(); renderParent("Taille du texte : " + k + "."); } });
+    }))));
   app.appendChild(h("div", { class: "card" }, h("div", { class: "label", text: "Prénom affiché" }), prenom,
     act("Enregistrer", "btn-prenom", function () { setReglages({ prenom: prenom.value.trim() }); out.textContent = "Prénom enregistré."; })));
   app.appendChild(h("div", { class: "card" }, h("div", { class: "label", text: "Leçons" }),
@@ -843,5 +854,6 @@ window.addEventListener("error", function (ev) {
   app.insertBefore(h("div", { class: "fatal", text: "Petit problème d'affichage (" + (ev.message || "erreur") + "). Revenez à l'accueil ou rechargez." }), app.firstChild);
 });
 window.__cahier = { version: VERSION };
+appliquerTaille();
 boot();
 })();

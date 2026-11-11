@@ -313,6 +313,96 @@
           }
         }
       }
+    },
+    "generateurs": {
+      "description": "Exercices de calcul tirés au hasard à chaque séance par l'appli (generateurs.js), en plus ou à la place de calculs. Réponses calculées par l'appli, vérifiées par tests/test_generateurs.py.",
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 6,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "type",
+          "nombre",
+          "ref"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^g[0-9]+$"
+          },
+          "type": {
+            "enum": [
+              "decomposition",
+              "composition",
+              "echanges",
+              "ecrire_chiffres",
+              "comparer",
+              "table",
+              "partage",
+              "moitie"
+            ]
+          },
+          "nombre": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 6
+          },
+          "params": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "chiffres": {
+                "enum": [
+                  3,
+                  4
+                ]
+              },
+              "forme": {
+                "enum": [
+                  "somme",
+                  "produits"
+                ]
+              },
+              "sens": {
+                "enum": [
+                  "grand",
+                  "petit",
+                  "mixte"
+                ]
+              },
+              "tables": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 9,
+                "uniqueItems": true,
+                "items": {
+                  "type": "integer",
+                  "minimum": 2,
+                  "maximum": 10
+                }
+              },
+              "operation": {
+                "enum": [
+                  "multiplication",
+                  "division",
+                  "mixte"
+                ]
+              },
+              "max": {
+                "type": "integer",
+                "minimum": 4,
+                "maximum": 200
+              }
+            }
+          },
+          "ref": {
+            "$ref": "#/$defs/refs"
+          }
+        }
+      }
     }
   },
   "allOf": [
@@ -359,8 +449,17 @@
         }
       },
       "then": {
-        "required": [
-          "calculs"
+        "anyOf": [
+          {
+            "required": [
+              "calculs"
+            ]
+          },
+          {
+            "required": [
+              "generateurs"
+            ]
+          }
         ]
       }
     },
