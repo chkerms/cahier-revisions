@@ -35,6 +35,16 @@ SPECS = [
     {"id": "g9", "type": "table", "nombre": 1, "params": {"tables": [2, 3, 4, 5, 6, 7, 8, 9], "operation": "mixte"}},
     {"id": "g10", "type": "partage", "nombre": 1, "params": {"tables": [2, 3, 4, 5]}},
     {"id": "g11", "type": "moitie", "nombre": 1, "params": {"max": 50}},
+    {"id": "g12", "type": "fractions", "nombre": 1, "params": {"operation": "mixte"}},
+    {"id": "g13", "type": "heure", "nombre": 1},
+    {"id": "g14", "type": "heure", "nombre": 1, "params": {"cas": "horloge"}},
+    {"id": "g15", "type": "multiplication_posee", "nombre": 1, "params": {"chiffres": 3, "chiffres_multiplicateur": 2}},
+    {"id": "g16", "type": "conversion", "nombre": 1, "params": {"groupes": ["longueur", "masse", "contenance", "duree"]}},
+    {"id": "g17", "type": "perimetre", "nombre": 1},
+    {"id": "g18", "type": "double_moitie", "nombre": 1},
+    {"id": "g19", "type": "decomposer_produit", "nombre": 1},
+    {"id": "g20", "type": "table", "nombre": 1, "params": {"tables": [25], "jusqua": 6}},
+    {"id": "g21", "type": "table", "nombre": 1, "params": {"tables": [6, 7, 8, 9], "operation": "addition"}},
 ]
 JS = f"""
 require({json.dumps(str(ROOT / "generateurs.js"))});
@@ -72,6 +82,27 @@ for it in items:
     val = eval_expr(it["expression"])
     if val != Fraction(int(rep)):
         ko(f"{it['expression']} = {val} et non {rep}")
+    if "svg" in it:
+        # relit l'horloge : angle de la grande aiguille (rouge) et de la petite (bleue)
+        import math
+        def angle(color):
+            m = re.search(r'x2="([\d.]+)" y2="([\d.]+)" stroke="' + color, it["svg"])
+            x, y = float(m[1]) - 110, 110 - float(m[2])
+            return math.degrees(math.atan2(x, y)) % 360
+        mins = round(angle("#c62828") / 6) % 60
+        heures = int(((angle("#1f3c88") + 1) % 360) // 30) or 12  # +1° : coordonnées arrondies au dixième
+        attendu = mins if "minutes" in txt(it["consigne"]) else heures
+        if int(rep) != attendu:
+            ko(f"horloge : lue {heures} h {mins}, réponse {rep}")
+        if "heure indique" in txt(it["consigne"]) and mins > 25:
+            ko(f"horloge : petite aiguille ambiguë ({heures} h {mins})")
+    if it["genere"] == "fractions":
+        f = re.findall(r"\{frac:(\d+)/(\d+)\}", txt(it["consigne"]))
+        (a, d1), (b, d2) = f
+        signe = "+" if "+" in txt(it["consigne"]) else "−"
+        r = int(a) + int(b) if signe == "+" else int(a) - int(b)
+        if d1 != d2 or int(rep) != r or not 0 <= r <= int(d1) or int(b) < 1:
+            ko(f"fractions : {txt(it['consigne'])} → {rep}")
     if it["genere"] == "ecrire_chiffres":
         if num2words:
             ref = num2words(int(rep), lang="fr").replace(" ", "-")

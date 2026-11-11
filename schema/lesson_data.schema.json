@@ -342,7 +342,14 @@
               "comparer",
               "table",
               "partage",
-              "moitie"
+              "moitie",
+              "fractions",
+              "heure",
+              "multiplication_posee",
+              "conversion",
+              "perimetre",
+              "double_moitie",
+              "decomposer_produit"
             ]
           },
           "nombre": {
@@ -356,6 +363,7 @@
             "properties": {
               "chiffres": {
                 "enum": [
+                  2,
                   3,
                   4
                 ]
@@ -381,13 +389,17 @@
                 "items": {
                   "type": "integer",
                   "minimum": 2,
-                  "maximum": 10
+                  "maximum": 25
                 }
               },
               "operation": {
                 "enum": [
                   "multiplication",
                   "division",
+                  "addition",
+                  "soustraction",
+                  "double",
+                  "moitie",
                   "mixte"
                 ]
               },
@@ -395,6 +407,52 @@
                 "type": "integer",
                 "minimum": 4,
                 "maximum": 200
+              },
+              "jusqua": {
+                "type": "integer",
+                "minimum": 2,
+                "maximum": 10
+              },
+              "cas": {
+                "enum": [
+                  "horloge",
+                  "grande_aiguille",
+                  "apres_midi",
+                  "moins"
+                ]
+              },
+              "chiffres_multiplicateur": {
+                "enum": [
+                  1,
+                  2
+                ]
+              },
+              "groupes": {
+                "type": "array",
+                "minItems": 1,
+                "uniqueItems": true,
+                "items": {
+                  "enum": [
+                    "longueur",
+                    "masse",
+                    "contenance",
+                    "duree"
+                  ]
+                }
+              },
+              "figure": {
+                "enum": [
+                  "carre",
+                  "rectangle",
+                  "mixte"
+                ]
+              },
+              "niveau": {
+                "enum": [
+                  1,
+                  2,
+                  3
+                ]
               }
             }
           },

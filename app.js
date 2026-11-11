@@ -1,7 +1,7 @@
 /* Cahier de révisions : lecteur de leçons chiffrées. Aucune dépendance externe. */
 "use strict";
 (function () {
-var VERSION = "1.2.0";
+var VERSION = "1.3.0";
 var app = document.getElementById("app");
 var nextBar = document.getElementById("next");
 var D = null, IMG = {}, LESSONS = [], FILTRE = "tout";
@@ -342,7 +342,7 @@ function renderBloc(b, opts) {
 function itemImg(it) {
   if (!it.image || !IMG[it.image]) return null;
   var im = (D.images || []).filter(function (x) { return x.id === it.image; })[0];
-  return h("img", { class: "qimg", src: IMG[it.image], alt: im ? im.description : "" });
+  return h("img", { class: "qimg", src: IMG[it.image], alt: im ? im.description : (it.alt || "") });
 }
 
 /* ------------------------------------------------------------ état global */
@@ -618,6 +618,7 @@ function renderEnd() {
 function stepCalculs(main) {
   var ci = 0, first = 0;
   var CAL = (D.calculs || []).concat(window.GENERATEURS ? window.GENERATEURS.creer(D.generateurs) : []);
+  CAL.forEach(function (c) { if (c.svg) { IMG[c.id] = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(c.svg); c.image = c.id; } });
   setNext(null);
   function norm(s) { var n = parseFloat(String(s).replace(",", ".")); return isNaN(n) ? null : Math.round(n * 1000); }
   function show() {
@@ -668,7 +669,7 @@ function stepCalculs(main) {
         setNext(ci < CAL.length - 1 ? "Calcul suivant ➜" : "Voir mon résultat ➜", function () { ci++; setNext(null); show(); });
       }
     } });
-    gauche.appendChild(disp); gauche.appendChild(fb); droite.appendChild(pad); droite.appendChild(h("div", { class: "actions" }, ok));
+    gauche.appendChild(fb); droite.appendChild(disp); droite.appendChild(pad); droite.appendChild(h("div", { class: "actions" }, ok));
     if (TTS.auto) TTS.speak(segOf(c.consigne), csay);
   }
   show();
