@@ -1,7 +1,7 @@
 /* Cahier de révisions : lecteur de leçons chiffrées. Aucune dépendance externe. */
 "use strict";
 (function () {
-var VERSION = "1.0.0";
+var VERSION = "1.0.1";
 var app = document.getElementById("app");
 var nextBar = document.getElementById("next");
 var D = null, IMG = {}, LESSONS = [], FILTRE = "tout";
@@ -144,6 +144,7 @@ function fracEl(content) {
     h("span", { class: "fn" }, p[0]), h("span", { class: "fd" }, p[1]));
 }
 function rich(s) {
+  s = String(s).replace(/(\d) (?=\d{3}(?!\d))/g, "$1\u202F"); /* 3 452 : espace insécable, le nombre ne se coupe pas */
   var frag = document.createDocumentFragment(), last = 0, m, hasFrac = false;
   TOKEN.lastIndex = 0;
   while ((m = TOKEN.exec(s))) {
