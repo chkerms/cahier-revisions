@@ -152,6 +152,23 @@ Acquis (premier coup)
 
 ---
 
+## Lot 4 : défi chrono en maths [DEMANDÉ 13/11/2026] · LIVRÉ en 1.8.0 (13/11/2026)
+
+**Besoin.** Un jeu de calcul mental « le plus vite possible », sur le modèle d'un jeu en BASIC sur Thomson TO8 : réponse au pavé numérique, puis Entrée. Pour chaque notion de maths du cahier.
+
+**Livré.**
+- Bouton « ⏱️ Défi » à côté de chaque leçon de maths qui a des `generateurs` (sauf `multiplication_posee`, qui se fait sur la feuille) ou au moins 3 calculs fixes ; aussi sur l'écran de fin de la leçon. Le record du profil s'affiche sur le bouton.
+- Partie : compte à rebours 3, 2, 1, puis 10 calculs tirés des générateurs (nouveaux nombres à chaque partie ; calculs fixes mélangés à défaut). Chrono à l'écran, pavé + grande touche « ↵ Entrée » ; un clavier physique ou un pavé numérique branché sur la tablette marche aussi (chiffres, virgule, effacement, Entrée).
+- Bonne réponse : on enchaîne. Erreur : la bonne réponse s'affiche, +5 secondes. Le chrono ne compte que le temps de réponse (pas les écrans de correction).
+- Fin : temps, justes sur 10, record par leçon et par profil (`prog:<profil>:<leçon>.defi`), « Rejouer », « Revoir la leçon » s'il y a eu des erreurs.
+- Journal : séance `type: "defi"` (temps de chaque calcul) ; bilan : section « DÉFIS CHRONO » (parties, meilleur temps, erreurs), erreurs du défi dans « À retravailler ».
+- Zone parent, carte « Mode quiz et défi chrono » : le défi est affiché par défaut et peut être masqué, par profil.
+- Tests : `tests/test_defi.py` (même copie jetable que `test_quiz.py`).
+
+**À vérifier sur la tablette.** Taille du pavé et de la touche Entrée au doigt, lisibilité du chrono.
+
+---
+
 ## Idées non arbitrées [PROPOSÉ]
 
 À ne pas coder sans accord du parent.

@@ -10,6 +10,8 @@ Chaque séance est notée sur l'appareil (étapes faites ou sautées, erreurs de
 
 Mode quiz, activé par le parent dans la Zone parent (par profil) : « Quiz français », « Quiz maths », « Quiz surprise ». 10 questions tirées dans toutes les leçons publiées ou seulement celles déjà ouvertes, au plus 2 par leçon, les questions ratées depuis 30 jours revenant deux fois plus souvent ; en maths, 7 questions puis 3 calculs générés. À la fin, un bouton ouvre la leçon de chaque question ratée.
 
+Défi chrono sur chaque leçon de maths : 10 calculs le plus vite possible, réponse au pavé puis « ↵ Entrée » (un clavier ou un pavé numérique branché marche aussi), +5 secondes par erreur, record à battre par leçon et par profil.
+
 Le contenu des leçons est chiffré (RSA-OAEP + AES-GCM). Le code est public, les leçons ne le sont pas : elles ne s'ouvrent qu'avec le mot de passe du cahier.
 
 - `index.html`, `app.js`, `sw.js` : l'application (sans dépendance externe)

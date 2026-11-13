@@ -83,6 +83,7 @@ python3 -I tests/test_generateurs.py     # node requis ; pip install num2words p
 python3 -m http.server 8765 &   # à la racine
 python3 tests/test_app.py http://localhost:8765/ <mot de passe>   # Chrome headless au format tablette Android
 python3 tests/test_quiz.py http://localhost:8765/ <mot de passe>  # mode quiz : copie avec les 3 exemples + tests/fixtures/essai_quiz_tables.json publiés
+python3 tests/test_defi.py http://localhost:8765/ <mot de passe>  # défi chrono : même copie que test_quiz.py
 ```
-`test_app.py` attend exactement les 3 leçons d'exemple : lance `test_quiz.py` sur une autre copie jetable, où la leçon d'essai est aussi publiée.
+`test_app.py` attend exactement les 3 leçons d'exemple : lance `test_quiz.py` et `test_defi.py` sur une autre copie jetable, où la leçon d'essai est aussi publiée, chacun sur un appareil neuf (ils le sont : nouveau contexte de navigateur).
 Dépendances : `pip install --break-system-packages jsonschema cryptography pillow playwright`.

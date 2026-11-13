@@ -1,7 +1,7 @@
 /* Cahier de révisions : lecteur de leçons chiffrées. Aucune dépendance externe. */
 "use strict";
 (function () {
-var VERSION = "1.7.0";
+var VERSION = "1.8.0";
 var app = document.getElementById("app");
 var nextBar = document.getElementById("next");
 var D = null, IMG = {}, LESSONS = [], VUE = null, CTX = null; /* CTX : leçon d'origine de la question affichée (quiz transverse) */
@@ -102,10 +102,10 @@ var idb = {
 var JOURNAL_JOURS = 180;
 var journal = {
   s: null,
-  debut: function (l) {
+  debut: function (l, type) {
     var now = new Date().toISOString(), pid = profils.actifId();
     this.s = { id: pid + ":" + now + ":" + Math.random().toString(36).slice(2, 7), profil: pid, debut: now, fin: now,
-      type: l._quiz ? "quiz_transverse" : "lecon", mode: l._quiz || null,
+      type: type || (l._quiz ? "quiz_transverse" : "lecon"), mode: l._quiz || null,
       lecon: l.meta.id, titre: plain(l.meta.titre), matiere: l.meta.matiere, parcours: (l.parcours || []).slice(),
       etapes: { vues: [], finies: [], sautees: [] }, terminee: false, ev: [] };
     this.save();
@@ -725,6 +725,8 @@ function renderEnd() {
     h("h2", { text: "Bravo" + nom + " !" }), h("p", { text: "Tu as gagné " + state.stars + " étoile" + (state.stars > 1 ? "s" : "") + " ⭐" }),
     revoir.length ? h("div", { class: "a-revoir", id: "a-revoir" }, h("p", { text: "📖 Pour progresser, relis " + (revoir.length > 1 ? "ces leçons" : "cette leçon") + " :" }),
       revoir.map(function (l) { return h("button", { class: "btn soft", type: "button", "data-revoir": l.meta.id, onclick: function () { openLesson(l); } }, "📖 Revoir ", rich(l.meta.titre)); })) : null,
+    (!D._quiz && defiDispo(D)) ? h("div", { class: "actions" }, h("button", { class: "btn soft", type: "button", "data-defi-fin": D.meta.id,
+      text: "⏱️ Défi chrono sur cette leçon", onclick: (function (l) { return function () { renderDefi(l); }; })(D) })) : null,
     h("div", { class: "actions" },
       h("button", { class: "btn", type: "button", text: "🔁 Recommencer", onclick: function () {
         if (D._quiz) return openQuiz(D._quiz);
@@ -828,13 +830,17 @@ function saisiePoeme(b) {
 }
 
 /* ------------------------------------------------------------ ouverture d'une leçon */
-function openLesson(lesson) {
+function chargerLecon(lesson) {
   D = lesson; BLOCS = {}; IMG = {}; CTX = null;
   D.lecon.blocs.forEach(function (b) { BLOCS[b.id] = b; if (b.saisie_parent) b.strophes = poemeLocal(b); });
   (D.images || []).forEach(function (im) {
     if (im.svg) IMG[im.id] = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(im.svg);
     else if (im.data) IMG[im.id] = im.data;
   });
+}
+function openLesson(lesson) {
+  defiStop();
+  chargerLecon(lesson);
   store.patch({ ouvert: true });
   state = { step: 0, done: {}, stars: 0 };
   journal.debut(D);
@@ -960,7 +966,11 @@ function leconsARevoir() {
 function carteModeQuiz() {
   var r = reglagesQuiz(), pa = profils.actif();
   function bascule(id) { var o = {}; o[id] = !reglagesQuiz()[id]; setReglagesQuiz(o); renderParent(quizType(id).label + (o[id] ? " activé." : " désactivé.")); }
-  return h("div", { class: "card", id: "mode-quiz" }, h("div", { class: "label", text: "Mode quiz (profil " + pa.libelle + ")" }),
+  var defiOn = !reglagesProfil().defi_off;
+  return h("div", { class: "card", id: "mode-quiz" }, h("div", { class: "label", text: "Mode quiz et défi chrono (profil " + pa.libelle + ")" }),
+    h("div", { class: "actions" }, h("button", { class: "btn" + (defiOn ? " primary" : ""), type: "button", id: "btn-defi-reglage", "aria-pressed": defiOn ? "true" : "false",
+      text: (defiOn ? "✓ " : "") + "⏱️ Défi chrono sur les leçons de maths", onclick: function () {
+        setReglagesProfil({ defi_off: defiOn }); renderParent("Défi chrono " + (defiOn ? "masqué." : "affiché.")); } })),
     h("p", { class: "parentnote", text: "Désactivé par défaut. Chaque quiz activé apparaît sur l'accueil s'il a au moins " + QUIZ_MIN + " questions." }),
     h("div", { class: "actions" }, QUIZ_TYPES.map(function (t) {
       return h("button", { class: "btn" + (r[t.id] ? " primary" : ""), type: "button", "data-quiz-type": t.id, "aria-pressed": r[t.id] ? "true" : "false",
@@ -976,6 +986,134 @@ function carteModeQuiz() {
       var n = nbQuestions(t.id), g = t.id === "francais" ? 0 : nbGenerateurs(t.id);
       return t.label + " : " + n + " question" + (n > 1 ? "s" : "") + (g ? " + calculs" : "");
     }).join(" · ") }));
+}
+
+/* ------------------------------------------------------------ défi chrono (maths) : 10 calculs, pavé + Entrée, record à battre */
+var DEFI_N = 10, DEFI_PENALITE = 5000, DEFI_EXCLUS = ["multiplication_posee"]; /* posée sur la feuille : pas de chrono */
+var DEFI = { timers: [], intervalle: null, touche: null };
+function defiStop() {
+  DEFI.timers.forEach(clearTimeout); DEFI.timers = [];
+  if (DEFI.intervalle) clearInterval(DEFI.intervalle); DEFI.intervalle = null;
+  if (DEFI.touche) document.removeEventListener("keydown", DEFI.touche); DEFI.touche = null;
+}
+function defiPlus(fn, ms) { DEFI.timers.push(setTimeout(fn, ms)); }
+function fmtTemps(ms) { return (Math.round(ms / 100) / 10).toFixed(1).replace(".", ",") + " s"; }
+function defiGens(l) { return (l.generateurs || []).filter(function (g) { return DEFI_EXCLUS.indexOf(g.type) < 0; }); }
+function defiDispo(l) {
+  if (reglagesProfil().defi_off || !l || l.meta.matiere !== "mathematiques") return false;
+  return (defiGens(l).length > 0 && !!window.GENERATEURS) || (l.calculs || []).length >= 3;
+}
+/* 10 calculs tirés des générateurs (sans doublon), sinon les calculs fixes de la leçon dans le désordre */
+function tirerDefi(l) {
+  var gens = defiGens(l), out = [], vus = {};
+  if (gens.length && window.GENERATEURS) {
+    for (var k = 0; out.length < DEFI_N && k < DEFI_N * 8; k++) {
+      var spec = JSON.parse(JSON.stringify(gens[k % gens.length])); spec.nombre = 1;
+      var ex = window.GENERATEURS.creer([spec])[0];
+      if (!ex) continue;
+      var cle = JSON.stringify(ex.consigne);
+      if (vus[cle]) continue;
+      vus[cle] = true; ex.id = ex.id + "-" + out.length; out.push(ex);
+    }
+  }
+  if (!out.length) out = shuffle(l.calculs || []).slice(0, DEFI_N).map(function (c) { return JSON.parse(JSON.stringify(c)); });
+  out.forEach(function (c) { if (c.svg) { IMG[c.id] = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(c.svg); c.image = c.id; } });
+  return out;
+}
+function renderDefi(l, direct) {
+  defiStop(); TTS.stop(); setNext(null); journal.fin();
+  chargerLecon(l);
+  var rec = (store.get(l.meta.id).defi || {}).record;
+  app.innerHTML = ""; window.scrollTo(0, 0);
+  var home = h("button", { class: "iconbtn", type: "button", id: "btn-home", "aria-label": "Retour aux leçons", text: "🏠", onclick: function () { renderHome(); } });
+  app.appendChild(h("header", { class: "top" }, home, h("h1", null, "⏱️ ", rich(l.meta.titre))));
+  var main = h("main", { id: "main", class: "defi" }); app.appendChild(main);
+  if (direct) return defiCompte(main, l, rec);
+  main.appendChild(h("div", { class: "card end", id: "defi-intro" }, h("div", { class: "big", text: "⏱️" }), h("h2", { text: "Défi chrono" }),
+    h("p", { text: DEFI_N + " calculs, le plus vite possible !" }),
+    h("p", { text: "Tape ta réponse, puis appuie sur ↵ Entrée." }),
+    h("p", { text: "Une erreur ajoute 5 secondes." }),
+    rec ? h("p", { class: "record", text: "🏆 Ton record : " + fmtTemps(rec) }) : null,
+    h("div", { class: "actions" }, h("button", { class: "btn primary", type: "button", id: "btn-partez", text: "🚀 Partez !", onclick: function () { defiCompte(main, l, rec); } }))));
+}
+function defiCompte(main, l, rec) {
+  main.innerHTML = "";
+  var z = h("div", { class: "compte", id: "compte", "aria-live": "assertive" }); main.appendChild(z);
+  ["3", "2", "1", "Go !"].forEach(function (t, i) { defiPlus(function () { z.textContent = t; }, i * 700); });
+  defiPlus(function () { defiJeu(main, l, rec); }, 4 * 700 - 200);
+}
+function defiJeu(main, l, rec) {
+  var CAL = tirerDefi(l), i = 0, cumul = 0, pen = 0, err = 0, t0 = 0, val = "", bloque = false;
+  journal.debut(l, "defi");
+  main.innerHTML = "";
+  var chrono = h("div", { class: "chrono", id: "chrono", text: fmtTemps(0) });
+  var compteur = h("div", { class: "counter", id: "defi-compteur" });
+  var question = h("div", { class: "card defi-q" });
+  var disp = h("div", { class: "saisie vide", id: "saisie", "aria-live": "polite", text: "?" });
+  var fb = h("div", { class: "defi-fb", "aria-live": "polite" });
+  function upd() { disp.textContent = val || "?"; disp.classList.toggle("vide", !val); }
+  function key(k) {
+    if (bloque) return;
+    if (k === "⌫") val = val.slice(0, -1);
+    else if (k === ",") { if (val && val.indexOf(",") < 0) val += ","; }
+    else if (val.length < 9) val = (val === "0" ? "" : val) + k;
+    upd();
+  }
+  function norm(x) { var n = parseFloat(String(x).replace(",", ".")); return isNaN(n) ? null : Math.round(n * 1000); }
+  function montre() {
+    var c = CAL[i];
+    compteur.textContent = (i + 1) + " / " + CAL.length;
+    question.innerHTML = ""; add(question, h("div", { class: "q" }, rich(txt(c.consigne)))); add(question, itemImg(c));
+    val = ""; upd(); disp.classList.remove("juste", "faux"); fb.textContent = "";
+    t0 = performance.now(); bloque = false;
+  }
+  function valider() {
+    if (bloque || !val) return;
+    bloque = true;
+    var c = CAL[i], tq = performance.now() - t0, ok = norm(val) === norm(c.reponse);
+    cumul += tq;
+    journal.ev({ k: "calcul", defi: true, id: c.id, gen: c.genere || null, consigne: plain(txt(c.consigne)), attendu: String(c.reponse),
+      saisies: [val], reussi: ok, fini: true, temps: Math.round(tq) });
+    if (ok) { disp.classList.add("juste"); fb.textContent = "✓"; }
+    else { err++; pen += DEFI_PENALITE; disp.classList.add("faux"); fb.textContent = "C'était " + c.reponse + "  (+5 s)"; }
+    chrono.textContent = fmtTemps(cumul + pen);
+    defiPlus(function () { i++; if (i < CAL.length) montre(); else fin(); }, ok ? 250 : 1300);
+  }
+  function fin() {
+    defiStop();
+    var total = Math.round(cumul + pen), st = store.get(), d = st.defi || {}, record = !d.record || total < d.record;
+    store.patch({ defi: { record: record ? total : d.record, parties: (d.parties || 0) + 1, dernier: total } });
+    journal.marque({ terminee: true, defi_ms: total, erreurs: err, n: CAL.length });
+    var nom = reglagesProfil().prenom ? " " + reglagesProfil().prenom : "";
+    main.innerHTML = "";
+    main.appendChild(h("div", { class: "card end", id: "defi-fin" }, h("div", { class: "big", text: record ? "🏆" : "⏱️" }),
+      h("div", { class: "chrono", id: "defi-temps", text: fmtTemps(total) }),
+      h("p", { id: "defi-justes", text: (CAL.length - err) + " juste" + (CAL.length - err > 1 ? "s" : "") + " sur " + CAL.length + (err ? " · " + err + " erreur" + (err > 1 ? "s" : "") + " (+" + (err * 5) + " s)" : " · aucune erreur !") }),
+      record ? h("p", { class: "record", id: "defi-record", text: d.record ? "Nouveau record" + nom + " ! L'ancien était " + fmtTemps(d.record) + "." : "Premier record" + nom + " !" })
+        : h("p", { class: "record", text: "Ton record : " + fmtTemps(d.record) + ". Essaie encore !" }),
+      h("div", { class: "actions" },
+        h("button", { class: "btn primary", type: "button", id: "btn-rejouer", text: "🔁 Rejouer", onclick: function () { renderDefi(l, true); } }),
+        err ? h("button", { class: "btn soft", type: "button", id: "btn-defi-lecon", text: "📖 Revoir la leçon", onclick: function () { openLesson(l); } }) : null,
+        h("button", { class: "btn", type: "button", id: "btn-retour", text: "🏠 Mes leçons", onclick: function () { renderHome(); } }))));
+  }
+  var pad = h("div", { class: "pad" }, ["1", "2", "3", "4", "5", "6", "7", "8", "9", ",", "0", "⌫"].map(function (k) {
+    return h("button", { class: "padkey" + (k === "⌫" ? " del" : ""), type: "button", "data-k": k, "aria-label": k === "⌫" ? "Effacer" : k, text: k, onclick: function () { key(k); } });
+  }).concat([h("button", { class: "padkey entree", type: "button", id: "btn-entree", "aria-label": "Entrée", text: "↵ Entrée", onclick: valider })]));
+  main.appendChild(h("div", { class: "defi-haut" }, chrono, compteur));
+  main.appendChild(question); main.appendChild(disp); main.appendChild(fb); main.appendChild(pad);
+  /* clavier physique ou pavé numérique branché sur la tablette */
+  DEFI.touche = function (ev) {
+    var k = ev.key;
+    if (/^[0-9]$/.test(k)) key(k);
+    else if (k === "," || k === ".") key(",");
+    else if (k === "Backspace") key("⌫");
+    else if (k === "Enter") valider();
+    else return;
+    ev.preventDefault();
+  };
+  document.addEventListener("keydown", DEFI.touche);
+  DEFI.intervalle = setInterval(function () { if (!bloque) chrono.textContent = fmtTemps(cumul + pen + performance.now() - t0); }, 100);
+  montre();
 }
 
 /* ------------------------------------------------------------ écrans */
@@ -1077,14 +1215,19 @@ function carteLecon(l) {
   if (aMethode || l.meta.periode) badges.push((aMethode ? l.meta.methode : "") + (aMethode && l.meta.periode ? " · " : "") + (l.meta.periode ? "P" + l.meta.periode : ""));
   var etat = !p.ouvert ? h("span", { class: "nouveau", text: "Nouveau ✨" })
     : h("span", null, p.fini ? "✓ Fini · ⭐ " + (p.best || 0) : "En cours", (p.demain && p.demain.length) ? "  🌙 " + p.demain.length + " à revoir" : "");
-  return h("button", { class: "lecon-card", type: "button", "data-id": l.meta.id, onclick: function () { openLesson(l); } },
+  var carte = h("button", { class: "lecon-card", type: "button", "data-id": l.meta.id, onclick: function () { openLesson(l); } },
     h("span", { class: "mat", "aria-hidden": "true", text: themeInfo(themeOf(l)).icon }),
     h("span", { class: "corps" }, h("span", { class: "titre", text: plain(l.meta.titre) }),
       h("span", { class: "sous", text: dateFr(l.meta.date) + (badges.length ? " · " + badges.join(" · ") : "") }), h("span", { class: "etat" }, etat)));
+  if (!defiDispo(l)) return carte;
+  var rec = (p.defi || {}).record;
+  return h("div", { class: "lecon-ligne" }, carte,
+    h("button", { class: "defi-btn", type: "button", "data-defi": l.meta.id, "aria-label": "Défi chrono" + (rec ? ", record " + fmtTemps(rec) : ""), onclick: function () { renderDefi(l); } },
+      h("span", { class: "ic", "aria-hidden": "true", text: "⏱️" }), h("span", { class: "lbl", text: rec ? "🏆 " + fmtTemps(rec) : "Défi" })));
 }
 
 function renderHome(info) {
-  TTS.stop(); setNext(null); D = null; CTX = null; journal.fin(); app.innerHTML = ""; window.scrollTo(0, 0);
+  defiStop(); TTS.stop(); setNext(null); D = null; CTX = null; journal.fin(); app.innerHTML = ""; window.scrollTo(0, 0);
   var vues = { revoir: ["🌙", "À revoir", aRevoir], nouveau: ["✨", "Nouvelles leçons", estNouvelle] };
   var liste = null, titre = null;
   if (VUE && vues[VUE]) { liste = LESSONS.filter(vues[VUE][2]); titre = vues[VUE][0] + " " + vues[VUE][1]; }
@@ -1171,6 +1314,7 @@ function genererBilan(all, pid, depuis) {
     x.ev.forEach(function (e) { lc(e.lecon || x.lecon, e.titre || x.titre).ev.push(e); });
   });
   var quizT = S.filter(function (x) { return x.type === "quiz_transverse"; });
+  var defis = S.filter(function (x) { return x.type === "defi" && x.terminee; });
   L.push(S.length + " séance" + (S.length > 1 ? "s" : "") + ", " + Math.round(minutes) + " minute" + (Math.round(minutes) > 1 ? "s" : "") +
     " au total" + (plafond ? " (séances longues comptées 30 min)" : "") + ", " + ordre.length + " leçon" + (ordre.length > 1 ? "s" : "") + " travaillée" + (ordre.length > 1 ? "s" : "") + ".");
   if (quizT.length) {
@@ -1179,6 +1323,7 @@ function genererBilan(all, pid, depuis) {
     L.push("Dont " + quizT.length + " quiz transverse" + (quizT.length > 1 ? "s" : "") + " (" + quizT.map(function (x) { return x.mode; }).join(", ") + ") : " +
       q1 + "/" + qe.length + " réponses justes du premier coup. Leurs erreurs sont rangées sous la leçon d'origine.");
   }
+  if (defis.length) L.push("Dont " + defis.length + " défi" + (defis.length > 1 ? "s" : "") + " chrono terminé" + (defis.length > 1 ? "s" : "") + ".");
   L.push("Les identifiants entre crochets sont les meta.id des leçons.");
 
   var sautees = S.filter(function (x) { return x.etapes.sautees.some(function (e) { return x.etapes.finies.indexOf(e) < 0; }); });
@@ -1210,7 +1355,7 @@ function genererBilan(all, pid, depuis) {
     var cal = ev.filter(function (e) { return e.k === "calcul"; }), cok = cal.filter(function (e) { return e.reussi && e.saisies.length === 1; }).length;
     cal.filter(function (e) { return !(e.reussi && e.saisies.length === 1); }).slice(0, 8).forEach(function (e) {
       pb.push("calcul " + (e.gen ? "(" + e.gen + ") " : e.id + " ") + guil(e.consigne) + " : attendu " + e.attendu + ", saisi " + e.saisies.join(" puis ") +
-        (e.reussi ? "" : e.fini === false ? " (calcul quitté en cours)" : " (non trouvé)"));
+        (e.reussi ? "" : e.fini === false ? " (calcul quitté en cours)" : e.defi ? "" : " (non trouvé)") + (e.defi ? " (défi chrono)" : ""));
     });
     if (cal.length) ok.push("calculs " + cok + "/" + cal.length + " du premier coup");
     /* cartes : état à la dernière séance où elles ont été passées */
@@ -1238,11 +1383,22 @@ function genererBilan(all, pid, depuis) {
   L.push("", "ACQUIS");
   if (!acquis.length) L.push("- aucune leçon sans erreur sur cette période");
   acquis.forEach(function (a) { L.push("- " + a); });
+  if (defis.length) {
+    L.push("", "DÉFIS CHRONO (" + DEFI_N + " calculs, +5 s par erreur)");
+    var parL = {}, ordreD = [];
+    defis.forEach(function (x) { if (!parL[x.lecon]) { parL[x.lecon] = []; ordreD.push(x.lecon); } parL[x.lecon].push(x); });
+    ordreD.forEach(function (id) {
+      var ps = parL[id], best = ps.slice().sort(function (a, b) { return a.defi_ms - b.defi_ms; })[0];
+      L.push("- " + guil(ps[0].titre) + " [" + id + "] : " + ps.length + " partie" + (ps.length > 1 ? "s" : "") + ", meilleur temps " + fmtTemps(best.defi_ms) +
+        " (" + best.erreurs + " erreur" + (best.erreurs > 1 ? "s" : "") + "), temps : " + ps.map(function (x) { return fmtTemps(x.defi_ms); }).join(", "));
+    });
+  }
   var court = L.join("\n");
 
   L.push("", "DÉTAIL PAR SÉANCE");
   S.forEach(function (x) {
     var m = Math.min(DUREE_MAX, Math.round((new Date(x.fin) - new Date(x.debut)) / 6e4));
+    if (x.type === "defi") { L.push("- " + jjmmhh(x.debut) + ", défi chrono " + guil(x.titre) + " : " + (x.terminee ? fmtTemps(x.defi_ms) + ", " + x.erreurs + " erreur" + (x.erreurs > 1 ? "s" : "") : "abandonné")); return; }
     L.push("- " + jjmmhh(x.debut) + ", " + m + " min, " + guil(x.titre) + " : étapes finies " + (x.etapes.finies.join(", ") || "aucune") +
       (x.terminee ? " ; leçon terminée" : " ; leçon non terminée"));
   });
