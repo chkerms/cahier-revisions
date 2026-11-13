@@ -71,6 +71,11 @@ def norm(s):
     return " ".join(s.split())
 
 
+# renvois à un élément de la leçon (opération posée, tableau, dessin) que la question n'affiche pas ; s'applique au texte normalisé
+RENVOI = re.compile(r"\b(ligne \d+|ci dessus|ci dessous|(ce|cet|cette) (tableau|dessin|sch[ée]ma|op[ée]ration|calcul pos[ée]|image|figure)|"
+                    r"l op[ée]ration pos[ée]e)\b")
+
+
 def txt(e):
     """Texte d'un énoncé (chaîne ou {texte, oral})."""
     return e if isinstance(e, str) else e["texte"]
@@ -344,6 +349,15 @@ def validate(d):
             for r in it["ref"]:
                 if r not in blocs:
                     E(f"{coll} {it['id']}", f"ref '{r}' inexistante")
+    # une question se lit seule (quiz transverse, défi) : pas de renvoi à un élément de la leçon qui n'est pas affiché
+    for coll, champ in (("cartes", "recto"), ("quiz", "question"), ("calculs", "consigne"), ("oral", "question")):
+        for it in d.get(coll, []):
+            if "image" in it:
+                continue
+            m = RENVOI.search(norm(txt(it[champ])))
+            if m:
+                E(f"{coll} {it['id']}", f"renvoie à « {m.group(0)} », qui n'est pas affiché avec la question : "
+                  "la reformuler pour qu'elle se comprenne seule, ou ajouter une image (SVG) qui montre l'élément")
     for q in d.get("quiz", []):
         if q["indice"]["bloc"] not in blocs:
             E(f"quiz {q['id']}", f"indice vers bloc '{q['indice']['bloc']}' inexistant")

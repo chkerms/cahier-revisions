@@ -1,7 +1,7 @@
 /* Cahier de révisions : lecteur de leçons chiffrées. Aucune dépendance externe. */
 "use strict";
 (function () {
-var VERSION = "1.8.0";
+var VERSION = "1.8.1";
 var app = document.getElementById("app");
 var nextBar = document.getElementById("next");
 var D = null, IMG = {}, LESSONS = [], VUE = null, CTX = null; /* CTX : leçon d'origine de la question affichée (quiz transverse) */
@@ -16,8 +16,8 @@ function setReglages(o) { var r = reglages(); for (var k in o) r[k] = o[k]; try 
    Par profil : progression (prog:<profil>:<leçon>) et réglages (reglages:<profil> : prénom).
    Communs à l'appareil : taille du texte, poésies tapées par le parent, leçons importées. */
 var PROFILS = [
-  { id: "enfant", libelle: "Enfant", icon: "🧒", test: false },
-  { id: "test", libelle: "Test parent", icon: "🧪", test: true }
+  { id: "enfant", libelle: "Enfant", icon: "🎒", test: false },
+  { id: "test", libelle: "Test parent", icon: "🔧", test: true }
 ];
 var profils = {
   actifId: function () { var a = null; try { a = localStorage.getItem("profil_actif"); } catch (e) {} return this.get(a) ? a : "enfant"; },
@@ -53,7 +53,7 @@ function majBandeau() {
   var t = profils.actif().test, b = document.getElementById("bandeau-test");
   document.body.classList.toggle("profil-test", t);
   if (t && !b) document.body.insertBefore(h("div", { class: "bandeau-test", id: "bandeau-test", role: "status",
-    text: "🧪 Profil test : la progression de l'enfant n'est pas touchée." }), document.body.firstChild);
+    text: "🔧 Profil test : la progression de l'enfant n'est pas touchée." }), document.body.firstChild);
   if (!t && b) b.remove();
 }
 /* demande à Chrome de ne pas effacer les données du site quand l'appareil manque de place */
@@ -440,7 +440,7 @@ function itemImg(it) {
 /* ------------------------------------------------------------ état global */
 var STEP_META = {
   lecon: { icon: "📖", label: "Ma leçon" }, cartes: { icon: "🔄", label: "Cartes" },
-  quiz: { icon: "🎯", label: "Quiz" }, calculs: { icon: "🧮", label: "Calculs" }, recitation: { icon: "🎤", label: "Récitation" },
+  quiz: { icon: "🎯", label: "Quiz" }, calculs: { icon: "➕", label: "Calculs" }, recitation: { icon: "🎤", label: "Récitation" },
   oral: { icon: "🗣️", label: "Interro" }
 };
 var state = { step: 0, done: {}, stars: 0 };
@@ -749,7 +749,7 @@ function stepCalculs(main) {
     setProgress(ci / CAL.length);
     if (ci >= CAL.length) {
       journal.etape("finies", "calculs");
-      zone.appendChild(h("div", { class: "card end" }, h("div", { class: "big", text: "🧮" }),
+      zone.appendChild(h("div", { class: "card end" }, h("div", { class: "big", text: "➕" }),
         h("p", { text: first + " calcul" + (first > 1 ? "s" : "") + " réussi" + (first > 1 ? "s" : "") + " du premier coup sur " + CAL.length + " !" })));
       setProgress(1); setNext(nextLabel(), goNext); return;
     }
@@ -1120,7 +1120,7 @@ function defiJeu(main, l, rec) {
 var MATIERES = {
   mathematiques: { icon: "🔢", label: "Maths" }, francais: { icon: "📝", label: "Français" },
   questionner_le_monde: { icon: "🌍", label: "Le monde" }, langue_vivante: { icon: "🇬🇧", label: "Anglais" },
-  emc: { icon: "🤝", label: "EMC" }, arts: { icon: "🎨", label: "Arts" }, autre: { icon: "📚", label: "Autre" }
+  emc: { icon: "🙌", label: "EMC" }, arts: { icon: "🎨", label: "Arts" }, autre: { icon: "📚", label: "Autre" }
 };
 function plain(s) { return String(s).replace(/\{[^{}:]+:([^{}]*)\}/g, "$1"); }
 function dateFr(iso) {
