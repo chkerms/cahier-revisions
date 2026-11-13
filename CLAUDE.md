@@ -74,7 +74,7 @@ Si le push est impossible (pas d'accès en écriture dans la session), envoie au
 
 ## 5. Si tu modifies l'application
 
-`index.html`, `app.js` et `sw.js` ne se modifient jamais pour une leçon donnée. Pour une évolution de l'application :
+`index.html`, `app.js` et `sw.js` ne se modifient jamais pour une leçon donnée. Les évolutions demandées et leur cadrage sont dans `BACKLOG.md` : lis-le avant de coder, et mets-le à jour quand un lot est livré. Pour une évolution de l'application :
 1. Incrémente `VERSION` dans `app.js` **et** `V` dans `sw.js` : sinon la tablette garde l'ancienne version en cache.
 2. Lance les tests :
 ```bash
