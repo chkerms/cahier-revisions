@@ -6,7 +6,7 @@ Dépôt public : jamais le prénom de l'enfant ni le contenu d'une leçon dans c
 Ordre de réalisation : lot 1, puis lot 2, puis lot 3. Le lot 2 a besoin des profils du lot 1, le lot 3 se sert du journal du lot 2.
 Chaque lot : `VERSION` (app.js) et `V` (sw.js) incrémentés, tests verts, essai sur la tablette.
 
-Légende : **[DEMANDÉ]** demandé par le parent · **[PROPOSÉ]** proposition de Claude, non validée · **[À ARBITRER]** choix à faire par le parent avant de coder.
+Légende : **[DEMANDÉ]** demandé par le parent · **[PROPOSÉ]** proposition de Claude, non validée · **[À ARBITRER]** choix à faire par le parent avant de coder · **[ARBITRÉ]** choix fait par le parent, daté.
 
 ---
 
@@ -26,7 +26,7 @@ Légende : **[DEMANDÉ]** demandé par le parent · **[PROPOSÉ]** proposition d
 - Migration au premier lancement de la nouvelle version : les clés `prog:<id>` deviennent `prog:enfant:<id>`, le prénom actuel passe au profil enfant. Elle ne tourne qu'une fois (drapeau `migration_profils`) et ne perd rien.
 - Changement de profil **uniquement dans la Zone parent**, carte « Profil actif ».
 - Profil test bien visible : bandeau « 🧪 Profil test » en haut de chaque écran, avec une couleur distincte.
-- **[À ARBITRER]** Retour automatique au profil enfant à chaque lancement de l'appli, pour qu'un oubli du parent ne fasse pas réviser l'enfant sur le profil test. Proposé : oui.
+- **[ARBITRÉ 13/11/2026]** Retour automatique au profil enfant à chaque lancement de l'appli, pour qu'un oubli du parent ne fasse pas réviser l'enfant sur le profil test. « Lancement » = chargement de la page (`boot()`), y compris quand Android relance l'appli sortie de la mémoire.
 - « Remettre la progression à zéro » ne vide que le profil actif. Le bouton dit lequel.
 - Dans la foulée **[PROPOSÉ]** : appeler `navigator.storage.persist()` au démarrage. Sans cela, Chrome peut effacer les données du site quand l'appareil manque de place.
 
@@ -107,8 +107,8 @@ Acquis (premier coup)
 - Zone parent, carte « Mode quiz » (réglage du profil actif) : désactivé par défaut ; cases « Quiz français », « Quiz maths », « Quiz surprise » (tout mélangé).
 - Accueil : quand le mode est actif, une rangée de raccourcis « 🎯 Quiz français », « 🔢 Quiz maths », « 🎲 Quiz surprise », au-dessus des thèmes. Rien n'apparaît s'il est désactivé.
 - Tirage : 10 questions (environ 5 minutes), au plus 2 par leçon pour varier. Les questions ratées dans les 30 derniers jours (journal du lot 2) ont 2 fois plus de chances de sortir.
-- **[À ARBITRER]** Réservoir : toutes les leçons publiées de la matière (elles ont été vues en classe), ou seulement celles déjà ouvertes par l'enfant. Proposé : toutes.
-- **[À ARBITRER]** Quiz maths : mélanger 7 QCM et 3 calculs générés (types `generateurs` des leçons concernées). Proposé : oui.
+- **[ARBITRÉ 13/11/2026]** Réservoir réglable par le parent dans la carte « Mode quiz » (par profil) : « Toutes les leçons publiées » (valeur par défaut) ou « Seulement les leçons déjà ouvertes ». Avec le second choix, une leçon compte comme ouverte dès que `ouvert` vaut `true` dans la progression du profil actif.
+- **[ARBITRÉ 13/11/2026]** Quiz maths : 7 QCM et 3 calculs générés, tirés des `generateurs` des leçons du réservoir. Si le réservoir n'a aucun générateur, 10 QCM. Le quiz surprise suit la même règle pour sa part de maths.
 - Mauvaise réponse : même indice qu'aujourd'hui (le bloc de la leçon d'origine).
 - Écran de fin : score du premier coup, puis pour chaque question ratée un bouton « 📖 Revoir la leçon » qui ouvre la leçon d'origine sur l'étape Leçon. Le quiz sert de diagnostic, la leçon de remédiation : c'est la réponse au cours sauté.
 - Le quiz transverse tient une séance dans le journal (`type: "quiz_transverse"`, matière, questions et leçons d'origine).
@@ -122,9 +122,11 @@ Acquis (premier coup)
 **Critères d'acceptation.**
 - Mode désactivé : accueil identique à aujourd'hui.
 - Mode activé sur le profil test seulement : l'accueil du profil enfant ne montre aucun quiz.
+- Réservoir « déjà ouvertes » : une leçon jamais ouverte ne fournit aucune question ; le raccourci se masque s'il reste moins de 5 questions.
+- Quiz maths : 7 questions à choix puis 3 calculs au pavé, ou 10 questions à choix sans générateur disponible.
 - Une question avec dessin affiche le bon dessin, même si deux leçons ont une image `img1`.
 
-**Tests.** `test_app.py` : raccourcis absents par défaut, présents après activation, quiz de 10 questions jouable, images correctes avec deux leçons d'exemple ayant le même `id` d'image.
+**Tests.** `test_app.py` : raccourcis absents par défaut, présents après activation, quiz de 10 questions jouable, images correctes avec deux leçons d'exemple ayant le même `id` d'image, réservoir « déjà ouvertes » respecté, répartition 7 + 3 en maths.
 
 ---
 
