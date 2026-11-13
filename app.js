@@ -1,7 +1,7 @@
 /* Cahier de révisions : lecteur de leçons chiffrées. Aucune dépendance externe. */
 "use strict";
 (function () {
-var VERSION = "1.4.0";
+var VERSION = "1.5.0";
 var app = document.getElementById("app");
 var nextBar = document.getElementById("next");
 var D = null, IMG = {}, LESSONS = [], VUE = null;
@@ -11,6 +11,56 @@ function reglages() { try { return JSON.parse(localStorage.getItem("reglages") |
 var TAILLES = { petite: 0.78, moyenne: 0.88, grande: 1 };
 function appliquerTaille() { document.documentElement.style.setProperty("--zoom", TAILLES[reglages().taille] || TAILLES.moyenne); }
 function setReglages(o) { var r = reglages(); for (var k in o) r[k] = o[k]; try { localStorage.setItem("reglages", JSON.stringify(r)); } catch (e) {} }
+
+/* profils : l'enfant et un profil test pour le parent, sur le même appareil.
+   Par profil : progression (prog:<profil>:<leçon>) et réglages (reglages:<profil> : prénom).
+   Communs à l'appareil : taille du texte, poésies tapées par le parent, leçons importées. */
+var PROFILS = [
+  { id: "enfant", libelle: "Enfant", icon: "🧒", test: false },
+  { id: "test", libelle: "Test parent", icon: "🧪", test: true }
+];
+var profils = {
+  actifId: function () { var a = null; try { a = localStorage.getItem("profil_actif"); } catch (e) {} return this.get(a) ? a : "enfant"; },
+  get: function (id) { for (var i = 0; i < PROFILS.length; i++) if (PROFILS[i].id === id) return PROFILS[i]; return null; },
+  actif: function () { return this.get(this.actifId()); },
+  choisir: function (id) { if (!this.get(id)) return; try { localStorage.setItem("profil_actif", id); } catch (e) {} majBandeau(); }
+};
+function reglagesProfil() { try { return JSON.parse(localStorage.getItem("reglages:" + profils.actifId()) || "{}"); } catch (e) { return {}; } }
+function setReglagesProfil(o) { var r = reglagesProfil(); for (var k in o) r[k] = o[k]; try { localStorage.setItem("reglages:" + profils.actifId(), JSON.stringify(r)); } catch (e) {} }
+/* 1.4.0 → profils : une seule fois, sans rien perdre (clés prog:<leçon> et prénom global vers le profil enfant) */
+function migrerProfils() {
+  try {
+    if (localStorage.getItem("migration_profils")) return;
+    Object.keys(localStorage).forEach(function (k) {
+      if (k.indexOf("prog:") !== 0 || k.slice(5).indexOf(":") >= 0) return;
+      var neuve = "prog:enfant:" + k.slice(5);
+      if (localStorage.getItem(neuve) === null) localStorage.setItem(neuve, localStorage.getItem(k));
+      localStorage.removeItem(k);
+    });
+    var g = reglages();
+    if (g.prenom !== undefined) {
+      var re = JSON.parse(localStorage.getItem("reglages:enfant") || "{}");
+      if (re.prenom === undefined) re.prenom = g.prenom;
+      localStorage.setItem("reglages:enfant", JSON.stringify(re));
+      delete g.prenom; localStorage.setItem("reglages", JSON.stringify(g));
+    }
+    localStorage.setItem("migration_profils", "1");
+  } catch (e) {}
+}
+function majBandeau() {
+  var t = profils.actif().test, b = document.getElementById("bandeau-test");
+  document.body.classList.toggle("profil-test", t);
+  if (t && !b) document.body.insertBefore(h("div", { class: "bandeau-test", id: "bandeau-test", role: "status",
+    text: "🧪 Profil test : la progression de l'enfant n'est pas touchée." }), document.body.firstChild);
+  if (!t && b) b.remove();
+}
+/* demande à Chrome de ne pas effacer les données du site quand l'appareil manque de place */
+var STOCKAGE = { protege: null };
+function protegerStockage() {
+  if (!navigator.storage || !navigator.storage.persist) return;
+  navigator.storage.persisted().then(function (p) { return p || navigator.storage.persist(); })
+    .then(function (p) { STOCKAGE.protege = !!p; }).catch(function () {});
+}
 
 var idb = {
   db: null,
@@ -117,9 +167,9 @@ function shuffle(a) {
   for (var i = a.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)); var t = a[i]; a[i] = a[j]; a[j] = t; }
   return a;
 }
-/* progression par leçon, sur cet appareil uniquement */
+/* progression par leçon et par profil, sur cet appareil uniquement */
 var store = {
-  key: function (id) { return "prog:" + (id || D.meta.id); },
+  key: function (id) { return "prog:" + profils.actifId() + ":" + (id || D.meta.id); },
   get: function (id) { try { return JSON.parse(localStorage.getItem(this.key(id)) || "{}"); } catch (e) { return {}; } },
   set: function (v, id) { try { localStorage.setItem(this.key(id), JSON.stringify(v)); } catch (e) {} },
   patch: function (o) { var s = this.get(); for (var k in o) s[k] = o[k]; this.set(s); }
@@ -603,7 +653,7 @@ function stepOral(main) {
 function renderEnd() {
   TTS.stop();
   var main = shell(); setProgress(1); setNext(null);
-  var nom = reglages().prenom ? " " + reglages().prenom : "";
+  var nom = reglagesProfil().prenom ? " " + reglagesProfil().prenom : "";
   var pr = store.get(); store.patch({ fini: true, best: Math.max(pr.best || 0, state.stars) });
   main.appendChild(h("div", { class: "card end", id: "fin" }, h("div", { class: "big", text: "🏆" }),
     h("h2", { text: "Bravo" + nom + " !" }), h("p", { text: "Tu as gagné " + state.stars + " étoile" + (state.stars > 1 ? "s" : "") + " ⭐" }),
@@ -837,7 +887,7 @@ function renderHome(info) {
   }
 
   /* accueil : raccourcis, puis les thèmes de chaque matière */
-  var r = reglages();
+  var r = reglagesProfil();
   app.appendChild(h("header", { class: "top home" }, h("h1", { text: r.prenom ? "Bonjour " + r.prenom + " ! 👋" : "Mes révisions 📚" })));
   if (!LESSONS.length) app.appendChild(h("div", { class: "card end" }, h("div", { class: "big", text: "🌱" }), h("p", { text: "Pas encore de leçon. Elles arriveront bientôt !" })));
   var raccourcis = [];
@@ -889,7 +939,7 @@ function cartePrograme() {
 
 function renderParent(msg) {
   TTS.stop(); setNext(null); app.innerHTML = "";
-  var r = reglages();
+  var r = reglagesProfil(), pa = profils.actif();
   var prenom = h("input", { type: "text", class: "mdp", id: "prenom", value: r.prenom || "", maxlength: "20", "aria-label": "Prénom de l'enfant" });
   var file = h("input", { type: "file", accept: ".json,application/json", id: "import", class: "file" });
   var out = h("p", { class: "erreur", role: "status", text: msg || "" });
@@ -910,29 +960,38 @@ function renderParent(msg) {
   });
   function act(label, id, fn, cls) { return h("button", { class: "btn " + (cls || ""), type: "button", id: id, text: label, onclick: fn }); }
   app.appendChild(h("header", { class: "top" }, h("h1", { text: "⚙️ Zone parent" })));
+  app.appendChild(h("div", { class: "card", id: "profils" }, h("div", { class: "label", text: "Profil actif" }),
+    h("div", { class: "actions" }, PROFILS.map(function (x) {
+      var on = x.id === pa.id;
+      return h("button", { class: "btn" + (on ? " primary" : ""), type: "button", "data-profil": x.id, "aria-pressed": on ? "true" : "false",
+        text: x.icon + " " + x.libelle, onclick: function () { profils.choisir(x.id); renderParent("Profil actif : " + x.libelle + "."); } });
+    })),
+    h("p", { class: "parentnote", text: "Le profil test garde sa propre progression. L'appli revient au profil Enfant à chaque lancement." })));
   var taille = reglages().taille || "moyenne";
   app.appendChild(h("div", { class: "card" }, h("div", { class: "label", text: "Taille du texte" }),
     h("div", { class: "actions" }, ["petite", "moyenne", "grande"].map(function (k) {
       return h("button", { class: "btn" + (k === taille ? " primary" : ""), type: "button", "data-taille": k, "aria-pressed": k === taille ? "true" : "false",
         text: k.charAt(0).toUpperCase() + k.slice(1), onclick: function () { setReglages({ taille: k }); appliquerTaille(); renderParent("Taille du texte : " + k + "."); } });
     }))));
-  app.appendChild(h("div", { class: "card" }, h("div", { class: "label", text: "Prénom affiché" }), prenom,
-    act("Enregistrer", "btn-prenom", function () { setReglages({ prenom: prenom.value.trim() }); out.textContent = "Prénom enregistré."; })));
+  app.appendChild(h("div", { class: "card" }, h("div", { class: "label", text: "Prénom affiché (profil " + pa.libelle + ")" }), prenom,
+    act("Enregistrer", "btn-prenom", function () { setReglagesProfil({ prenom: prenom.value.trim() }); out.textContent = "Prénom enregistré pour le profil " + pa.libelle + "."; })));
   app.appendChild(h("div", { class: "card" }, h("div", { class: "label", text: "Leçons" }),
     h("p", { text: LESSONS.length + " leçon(s) sur cet appareil." }),
     act("🔄 Recharger les leçons", "btn-recharger", function () { boot(); }),
     h("div", { class: "label", text: "Ajouter une leçon depuis un fichier (secours)" }), file));
   app.appendChild(cartePrograme());
   app.appendChild(h("div", { class: "card" }, h("div", { class: "label", text: "Progression" }),
-    act("♻️ Remettre toute la progression à zéro", "btn-raz", function () {
-      Object.keys(localStorage).forEach(function (k) { if (k.indexOf("prog:") === 0) localStorage.removeItem(k); });
-      out.textContent = "Progression remise à zéro.";
+    act("♻️ Remettre à zéro la progression du profil " + pa.libelle, "btn-raz", function () {
+      var pre = "prog:" + pa.id + ":";
+      Object.keys(localStorage).forEach(function (k) { if (k.indexOf(pre) === 0) localStorage.removeItem(k); });
+      out.textContent = "Progression du profil " + pa.libelle + " remise à zéro.";
     }, "soft"),
     act("🔒 Verrouiller ce cahier (redemander le mot de passe)", "btn-verrou", function () {
       idb.del("cle").then(function () { renderLogin(); });
     }, "soft")));
   app.appendChild(out);
-  app.appendChild(h("p", { class: "parentnote", text: "Version " + VERSION + " · données stockées uniquement sur cet appareil." }));
+  app.appendChild(h("p", { class: "parentnote", text: "Version " + VERSION + " · données stockées uniquement sur cet appareil" +
+    (STOCKAGE.protege === true ? " (protégées contre l'effacement automatique)." : STOCKAGE.protege === false ? " (non protégées : Chrome peut les effacer si l'appareil manque de place)." : ".") }));
   setNext("⬅ Retour aux leçons", function () { renderHome(); });
 }
 
@@ -960,5 +1019,8 @@ window.addEventListener("error", function (ev) {
 });
 window.__cahier = { version: VERSION };
 appliquerTaille();
+migrerProfils();
+profils.choisir("enfant"); /* chaque lancement repart sur le profil de l'enfant */
+protegerStockage();
 boot();
 })();

@@ -4,6 +4,8 @@ Petite application web de révision pour l'école primaire : leçon lue à voix 
 
 L'accueil range les leçons par matière, puis par thème du programme de CE2 (grammaire, conjugaison, dictée… ; nombres, fractions, géométrie…), avec deux raccourcis : « Nouvelles leçons » et « À revoir ». La Zone parent montre les leçons de chaque thème, y compris les thèmes encore vides.
 
+Deux profils sur le même appareil : « Enfant » et « Test parent », chacun avec sa progression et son prénom. On change de profil dans la Zone parent ; un bandeau signale le profil test, et l'appli revient au profil Enfant à chaque lancement.
+
 Le contenu des leçons est chiffré (RSA-OAEP + AES-GCM). Le code est public, les leçons ne le sont pas : elles ne s'ouvrent qu'avec le mot de passe du cahier.
 
 - `index.html`, `app.js`, `sw.js` : l'application (sans dépendance externe)

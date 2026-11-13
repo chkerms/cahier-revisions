@@ -10,7 +10,10 @@ Légende : **[DEMANDÉ]** demandé par le parent · **[PROPOSÉ]** proposition d
 
 ---
 
-## Lot 1 : deux profils sur la même tablette [DEMANDÉ]
+## Lot 1 : deux profils sur la même tablette [DEMANDÉ] · LIVRÉ en 1.5.0 (13/11/2026)
+
+> Livré et testé en Chrome headless au format tablette (`tests/test_app.py`, section « Profils »). Reste à vérifier sur la vraie tablette : bandeau, bascule, retour au profil enfant après fermeture de l'appli par Android, statut « protégées » en bas de la Zone parent.
+> Écart avec le cadrage : le profil actif est stocké dans `profil_actif` (pas d'objet `profils` en localStorage, la liste des profils est fixe dans `app.js`) ; le prénom et les futurs réglages par profil sont dans `reglages:<profil>`.
 
 **Besoin.** Le parent teste l'appli sur l'appareil de l'enfant. Ses essais ne doivent pas toucher la progression de l'enfant.
 
@@ -26,7 +29,7 @@ Légende : **[DEMANDÉ]** demandé par le parent · **[PROPOSÉ]** proposition d
 - Migration au premier lancement de la nouvelle version : les clés `prog:<id>` deviennent `prog:enfant:<id>`, le prénom actuel passe au profil enfant. Elle ne tourne qu'une fois (drapeau `migration_profils`) et ne perd rien.
 - Changement de profil **uniquement dans la Zone parent**, carte « Profil actif ».
 - Profil test bien visible : bandeau « 🧪 Profil test » en haut de chaque écran, avec une couleur distincte.
-- **[ARBITRÉ 13/11/2026]** Retour automatique au profil enfant à chaque lancement de l'appli, pour qu'un oubli du parent ne fasse pas réviser l'enfant sur le profil test. « Lancement » = chargement de la page (`boot()`), y compris quand Android relance l'appli sortie de la mémoire.
+- **[ARBITRÉ 13/11/2026]** Retour automatique au profil enfant à chaque lancement de l'appli, pour qu'un oubli du parent ne fasse pas réviser l'enfant sur le profil test. « Lancement » = chargement de la page, y compris quand Android relance l'appli sortie de la mémoire. « Recharger les leçons » ne change pas de profil.
 - « Remettre la progression à zéro » ne vide que le profil actif. Le bouton dit lequel.
 - Dans la foulée **[PROPOSÉ]** : appeler `navigator.storage.persist()` au démarrage. Sans cela, Chrome peut effacer les données du site quand l'appareil manque de place.
 

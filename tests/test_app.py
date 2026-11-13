@@ -109,6 +109,58 @@ with sync_playwright() as pw:
     check("Bonjour Léa" in p.inner_text("header"), "prénom affiché à l'accueil")
     shot(p, "c_accueil_prenom.png")
 
+    def zone_parent():
+        b = p.locator("#btn-parent").bounding_box()
+        p.mouse.move(b["x"] + 10, b["y"] + 10); p.mouse.down(); p.wait_for_timeout(2100); p.mouse.up()
+        p.wait_for_selector("#profils")
+
+    def ls(k):
+        return p.evaluate("k => localStorage.getItem(k)", k)
+
+    print("== Profils : isolation enfant / test")
+    check(p.locator("#bandeau-test").count() == 0, "profil enfant : pas de bandeau test")
+    check(ls("prog:enfant:maths-les-fractions") is not None and ls("prog:maths-les-fractions") is None, "progression rangée sous le profil enfant")
+    zone_parent()
+    check(p.get_attribute("[data-profil=enfant]", "aria-pressed") == "true", "zone parent : profil Enfant actif par défaut")
+    p.click("[data-profil=test]"); p.wait_for_selector("#bandeau-test")
+    check("profil Test parent" in p.inner_text("#btn-raz"), "remise à zéro limitée au profil actif (libellé)")
+    p.click("#next-btn"); p.wait_for_selector(".theme-tile")
+    check(p.locator("#bandeau-test").is_visible(), "profil test : bandeau visible à l'accueil")
+    check("Bonjour Léa" not in p.inner_text("header"), "profil test : prénom de l'enfant non affiché")
+    check("3 leçons" in p.inner_text("[data-vue=nouveau]"), "profil test : progression vierge (3 nouvelles leçons)")
+    shot(p, "d_profil_test.png")
+    p.click("[data-vue=nouveau]"); p.click(".lecon-card[data-id=grammaire-le-nom]"); p.wait_for_selector("[data-step]")
+    check(p.locator("#bandeau-test").is_visible(), "profil test : bandeau visible dans une leçon")
+    p.click("#btn-home"); p.wait_for_selector(".theme-tile, .lecon-card")
+    check(ls("prog:test:grammaire-le-nom") is not None and ls("prog:enfant:grammaire-le-nom") is None, "leçon ouverte en test : seul le profil test est modifié")
+    p.goto(URL); p.wait_for_selector(".theme-tile", timeout=20000)
+    zone_parent(); p.click("[data-profil=test]"); p.wait_for_selector("#bandeau-test")
+    p.click("#btn-raz")
+    check(ls("prog:test:grammaire-le-nom") is None and ls("prog:enfant:maths-les-fractions") is not None, "remise à zéro en test : la progression de l'enfant reste")
+    p.click("#next-btn"); p.wait_for_selector(".theme-tile")
+
+    print("== Profils : retour au profil enfant au lancement")
+    p.reload(); p.wait_for_selector(".theme-tile", timeout=20000)
+    check(p.locator("#bandeau-test").count() == 0 and "Bonjour Léa" in p.inner_text("header"), "relance : profil enfant, sans bandeau")
+    check("2 leçons" in p.inner_text("[data-vue=nouveau]"), "relance : progression de l'enfant intacte")
+
+    print("== Profils : migration depuis la 1.4.0")
+    p.evaluate("""() => {
+      Object.keys(localStorage).filter(k => k.startsWith('prog:') || k.startsWith('reglages:')).forEach(k => localStorage.removeItem(k));
+      localStorage.removeItem('migration_profils'); localStorage.removeItem('profil_actif');
+      localStorage.setItem('prog:maths-les-fractions', JSON.stringify({ ouvert: true, fini: true, best: 3 }));
+      localStorage.setItem('reglages', JSON.stringify({ taille: 'grande', prenom: 'Zoé' }));
+    }""")
+    p.reload(); p.wait_for_selector(".theme-tile", timeout=20000)
+    check(ls("prog:maths-les-fractions") is None and '"best":3' in (ls("prog:enfant:maths-les-fractions") or ""), "migration : progression 1.4.0 passée au profil enfant")
+    check("Bonjour Zoé" in p.inner_text("header") and "prenom" not in ls("reglages") and "grande" in ls("reglages"), "migration : prénom au profil enfant, taille conservée")
+    check(ls("migration_profils") == "1", "migration marquée faite")
+    p.evaluate("() => localStorage.setItem('prog:grammaire-le-nom', JSON.stringify({ ouvert: true }))")
+    p.reload(); p.wait_for_selector(".theme-tile", timeout=20000)
+    check(ls("prog:grammaire-le-nom") is not None and ls("prog:enfant:grammaire-le-nom") is None, "migration jouée une seule fois")
+    p.evaluate("() => { localStorage.removeItem('prog:grammaire-le-nom'); localStorage.setItem('reglages', JSON.stringify({ taille: 'moyenne' })); }")
+    p.reload(); p.wait_for_selector(".theme-tile", timeout=20000)
+
     print("== Hors ligne (service worker)")
     p.wait_for_function("navigator.serviceWorker && navigator.serviceWorker.controller !== null", timeout=15000)
     ctx.set_offline(True)
