@@ -8,6 +8,7 @@
     "periode": 2,
     "matiere": "mathematiques",
     "domaine": "nombres",
+    "theme": "fractions",
     "type_lecon": "notion",
     "niveau": "CE2",
     "sources": [

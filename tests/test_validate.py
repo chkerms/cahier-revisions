@@ -29,6 +29,8 @@ MUT = [
  (G, "paragraphe de 400 caractères", lambda d: d["lecon"]["blocs"].append({"id": "b9", "type": "paragraphe", "source": "p1", "texte": "a" * 400})),
  (P, "alerte bloquante + statut pret", lambda d: d["meta"].update(statut="pret")),
  # règles métier (validate.py)
+ (G, "thème de maths sur une leçon de français", lambda d: d["meta"].update(theme="fractions")),
+ (M, "thème hors liste", lambda d: d["meta"].update(theme="algebre")),
  (G, "distracteur inventé (hors leçon)", lambda d: d["quiz"][0]["distracteurs"].__setitem__(0, "une action")),
  (G, "réponse = distracteur", lambda d: d["quiz"][1]["distracteurs"].__setitem__(0, "une")),
  (G, "ref vers bloc inexistant", lambda d: d["cartes"][0]["ref"].append("b42")),

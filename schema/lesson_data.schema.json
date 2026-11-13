@@ -714,6 +714,11 @@
           "maxLength": 40,
           "description": "Libre : grammaire, conjugaison, numération, le vivant..."
         },
+        "theme": {
+          "enum": ["grammaire", "conjugaison", "dictee", "vocabulaire", "poesie",
+                   "nombres", "fractions", "operations", "calcul_mental", "mesures", "heure", "geometrie", "monnaie", "problemes", "donnees"],
+          "description": "Thème de l'accueil (liste fermée, alignée sur le programme de CE2). Français : grammaire, conjugaison, dictee, vocabulaire, poesie. Maths : nombres, fractions, operations, calcul_mental, mesures, heure, geometrie, monnaie, problemes, donnees. Absent pour les autres matières."
+        },
         "type_lecon": {
           "enum": [
             "notion",

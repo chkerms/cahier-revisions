@@ -24,6 +24,8 @@ Ce fichier est la référence. Une conversation qui produit une leçon le suit d
 - `meta.id` : identifiant stable en minuscules avec tirets (ex. `maths-nombres-jusqua-10000`). Republier le même id remplace la leçon.
 - `meta.date` : date de la séance en classe (sinon la date du jour). C'est elle qui ordonne l'accueil.
 - `meta.methode` (`MHM`, `MHF`, `autre`, `aucune`), `meta.periode`, `meta.module` : à renseigner si le parent les donne.
+- `meta.theme` : obligatoire en français et en maths, il range la leçon sur l'accueil. Français : `grammaire`, `conjugaison`, `dictee` (listes de mots, orthographe), `vocabulaire`, `poesie`. Maths : `nombres`, `fractions`, `operations`, `calcul_mental`, `mesures`, `heure`, `geometrie`, `monnaie`, `problemes`, `donnees`. Absent pour les autres matières. Une leçon sans thème est rangée d'après son titre (repli pour les leçons anciennes) ; la Zone parent montre le classement. La liste est commune à `app.js` (THEMES) et `outils/validate.py` (THEMES).
+- Dans un thème, les leçons s'affichent dans l'ordre de la méthode : période, puis numéro dans le titre (« Leçon 2 » avant « Leçon 10 »). Mets le numéro de la leçon de la méthode dans le titre.
 - Balisage inline : `{c1:mot}` (style déclaré dans `styles`), `{mc:mot}` (mot-clé), `{frac:3/4}`, `{lang-en:hello}`. Pas d'imbrication. Jamais `3/4` en ligne, `×` et pas `*`, virgule décimale.
 - Champ `oral` seulement si la synthèse vocale lirait mal (homographes, sigles).
 

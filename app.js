@@ -1,10 +1,10 @@
 /* Cahier de révisions : lecteur de leçons chiffrées. Aucune dépendance externe. */
 "use strict";
 (function () {
-var VERSION = "1.3.0";
+var VERSION = "1.4.0";
 var app = document.getElementById("app");
 var nextBar = document.getElementById("next");
-var D = null, IMG = {}, LESSONS = [], FILTRE = "tout";
+var D = null, IMG = {}, LESSONS = [], VUE = null;
 
 /* ------------------------------------------------------------ réglages et stockage */
 function reglages() { try { return JSON.parse(localStorage.getItem("reglages") || "{}"); } catch (e) { return {}; } }
@@ -745,43 +745,146 @@ function renderLogin(msg) {
   setTimeout(function () { inp.focus(); }, 50);
 }
 
-function renderHome(info) {
-  TTS.stop(); setNext(null); D = null; app.innerHTML = ""; window.scrollTo(0, 0);
-  var r = reglages();
-  app.appendChild(h("header", { class: "top home" }, h("h1", { text: r.prenom ? "Bonjour " + r.prenom + " ! 👋" : "Mes révisions 📚" })));
-  var mats = {}; LESSONS.forEach(function (l) { mats[l.meta.matiere] = true; });
-  var keys = Object.keys(mats);
-  if (keys.length > 1) {
-    app.appendChild(h("nav", { class: "steps filtres", "aria-label": "Matières" },
-      [["tout", "⭐", "Tout"]].concat(keys.map(function (k) { var m = MATIERES[k] || MATIERES.autre; return [k, m.icon, m.label]; })).map(function (f) {
-        return h("button", { class: "step", type: "button", "data-filtre": f[0], "aria-current": FILTRE === f[0] ? "step" : null,
-          onclick: function () { FILTRE = f[0]; renderHome(); } }, f[1] + " ", h("span", { class: "lbl2", text: f[2] }));
-      })));
+/* thèmes de l'accueil, alignés sur le programme de CE2 (même liste que THEMES dans outils/validate.py) */
+var THEMES = [
+  ["grammaire", "francais", "🔤", "Grammaire"], ["conjugaison", "francais", "⏳", "Conjugaison"],
+  ["dictee", "francais", "✏️", "Dictée"], ["vocabulaire", "francais", "📖", "Vocabulaire"], ["poesie", "francais", "📜", "Poésie"],
+  ["nombres", "mathematiques", "🔢", "Nombres"], ["fractions", "mathematiques", "🍕", "Fractions"],
+  ["operations", "mathematiques", "➗", "Opérations"], ["calcul_mental", "mathematiques", "⚡", "Calcul mental"],
+  ["mesures", "mathematiques", "📏", "Mesures"], ["heure", "mathematiques", "🕒", "L'heure"],
+  ["geometrie", "mathematiques", "📐", "Géométrie"], ["monnaie", "mathematiques", "💶", "Monnaie"],
+  ["problemes", "mathematiques", "💡", "Problèmes"], ["donnees", "mathematiques", "📊", "Tableaux et graphiques"]
+].map(function (x) { return { key: x[0], matiere: x[1], icon: x[2], label: x[3] }; });
+var THEME = {}; THEMES.forEach(function (x) { THEME[x.key] = x; });
+var ORDRE_MATIERES = ["francais", "mathematiques", "questionner_le_monde", "langue_vivante", "emc", "arts", "autre"];
+/* leçons publiées avant le champ meta.theme : on devine le thème d'après le titre, puis le domaine */
+var REGLES = {
+  francais: [["poesie", /poesie|poeme|recitation/], ["conjugaison", /conjug|imparfait|present de l|futur|passe compose|temps des verbes/],
+    ["dictee", /orthograph|dictee|^mots\b/], ["vocabulaire", /vocabul|lexique|synonym|antonym|famille|prefixe|suffixe|dictionnaire/]],
+  mathematiques: [["calcul_mental", /calcul mental/], ["fractions", /fraction/], ["monnaie", /monnaie|euro|prix/],
+    ["mesures", /mesure|longueur|masse|contenance|perimetre|conversion|unite/], ["heure", /heure|duree|horloge|calendrier/],
+    ["geometrie", /geometr|figure|polygone|angle|cercle|symetr|solide|segment|droite|carre|rectangle|triangle|patron/],
+    ["donnees", /tableau|diagramme|graphique|donnees/], ["problemes", /probleme/],
+    ["operations", /addition|soustraction|multipli|divis|operation|posee|soustraire|produit/]]
+};
+var DEFAUT = { francais: "grammaire", mathematiques: "nombres" };
+function sansAccent(s) { return String(s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, ""); }
+function themeOf(l) {
+  var m = l.meta;
+  if (m.theme && THEME[m.theme] && THEME[m.theme].matiere === m.matiere) return m.theme;
+  var regles = REGLES[m.matiere];
+  if (!regles) return "m:" + (MATIERES[m.matiere] ? m.matiere : "autre");
+  if (m.matiere === "francais") {
+    if (m.type_lecon === "poesie") return "poesie";
+    if (m.type_lecon === "liste_a_memoriser") return "dictee";
   }
-  var list = h("div", { class: "lecons" });
-  var shown = LESSONS.filter(function (l) { return FILTRE === "tout" || l.meta.matiere === FILTRE; });
-  if (!shown.length) list.appendChild(h("div", { class: "card end" }, h("div", { class: "big", text: "🌱" }),
-    h("p", { text: LESSONS.length ? "Pas de leçon dans cette matière." : "Pas encore de leçon. Elles arriveront bientôt !" })));
-  shown.forEach(function (l) {
-    var m = MATIERES[l.meta.matiere] || MATIERES.autre, p = store.get(l.meta.id), badges = [];
-    var aMethode = l.meta.methode && l.meta.methode !== "aucune" && l.meta.methode !== "autre";
-    if (aMethode || l.meta.periode) badges.push((aMethode ? l.meta.methode : "") + (aMethode && l.meta.periode ? " · " : "") + (l.meta.periode ? "P" + l.meta.periode : ""));
-    var etat = !p.ouvert ? h("span", { class: "nouveau", text: "Nouveau ✨" })
-      : h("span", null, p.fini ? "✓ Fini · ⭐ " + (p.best || 0) : "En cours", (p.demain && p.demain.length) ? "  🌙 " + p.demain.length + " à revoir" : "");
-    list.appendChild(h("button", { class: "lecon-card", type: "button", "data-id": l.meta.id, onclick: function () { openLesson(l); } },
-      h("span", { class: "mat", "aria-hidden": "true", text: m.icon }),
-      h("span", { class: "corps" }, h("span", { class: "titre", text: plain(l.meta.titre) }),
-        h("span", { class: "sous", text: dateFr(l.meta.date) + (badges.length ? " · " + badges.join(" · ") : "") }), h("span", { class: "etat" }, etat))));
-  });
-  app.appendChild(list);
-  if (info && info.illisibles) app.appendChild(h("p", { class: "parentnote", text: info.illisibles + " leçon(s) illisible(s) : le mot de passe a peut-être changé (zone parent > Verrouiller)." }));
+  var titre = sansAccent(plain(m.titre)).replace(/^(lecon|maths?)[^:]*:\s*/, ""), dom = sansAccent(m.domaine), i;
+  for (i = 0; i < regles.length; i++) if (regles[i][1].test(titre)) return regles[i][0];
+  for (i = 0; i < regles.length; i++) if (regles[i][1].test(dom)) return regles[i][0];
+  return DEFAUT[m.matiere];
+}
+function themeInfo(k) {
+  if (THEME[k]) return THEME[k];
+  var mk = k.slice(2), m = MATIERES[mk] || MATIERES.autre;
+  return { key: k, matiere: mk, icon: m.icon, label: m.label };
+}
+/* ordre de la méthode : période, puis numéro dans le titre (leçon 2 avant leçon 10), puis date */
+function ordreMethode(a, b) {
+  return ((a.meta.periode || 0) - (b.meta.periode || 0)) ||
+    plain(a.meta.titre).localeCompare(plain(b.meta.titre), "fr", { numeric: true }) || (a.meta.date < b.meta.date ? -1 : a.meta.date > b.meta.date ? 1 : 0);
+}
+function aRevoir(l) { var p = store.get(l.meta.id); return !!(p.demain && p.demain.length); }
+function estNouvelle(l) { return !store.get(l.meta.id).ouvert; }
+
+function piedParent() {
   var gear = h("button", { class: "iconbtn gear", type: "button", id: "btn-parent", "aria-label": "Zone parent (maintenir 2 secondes)", text: "⚙️" });
   var hint = h("p", { class: "parentnote", text: "" }), timer = null;
   function start(ev) { ev.preventDefault(); timer = setTimeout(function () { timer = null; renderParent(); }, 1800); hint.textContent = "Garde le doigt appuyé…"; }
   function stop() { if (timer) { clearTimeout(timer); timer = null; hint.textContent = "Zone parent : maintenir le bouton 2 secondes."; } }
   gear.addEventListener("pointerdown", start); gear.addEventListener("pointerup", stop); gear.addEventListener("pointerleave", stop);
   gear.addEventListener("contextmenu", function (ev) { ev.preventDefault(); });
-  app.appendChild(h("footer", { class: "pied" }, gear, hint));
+  return h("footer", { class: "pied" }, gear, hint);
+}
+
+function carteLecon(l) {
+  var p = store.get(l.meta.id), badges = [];
+  var aMethode = l.meta.methode && l.meta.methode !== "aucune" && l.meta.methode !== "autre";
+  if (aMethode || l.meta.periode) badges.push((aMethode ? l.meta.methode : "") + (aMethode && l.meta.periode ? " · " : "") + (l.meta.periode ? "P" + l.meta.periode : ""));
+  var etat = !p.ouvert ? h("span", { class: "nouveau", text: "Nouveau ✨" })
+    : h("span", null, p.fini ? "✓ Fini · ⭐ " + (p.best || 0) : "En cours", (p.demain && p.demain.length) ? "  🌙 " + p.demain.length + " à revoir" : "");
+  return h("button", { class: "lecon-card", type: "button", "data-id": l.meta.id, onclick: function () { openLesson(l); } },
+    h("span", { class: "mat", "aria-hidden": "true", text: themeInfo(themeOf(l)).icon }),
+    h("span", { class: "corps" }, h("span", { class: "titre", text: plain(l.meta.titre) }),
+      h("span", { class: "sous", text: dateFr(l.meta.date) + (badges.length ? " · " + badges.join(" · ") : "") }), h("span", { class: "etat" }, etat)));
+}
+
+function renderHome(info) {
+  TTS.stop(); setNext(null); D = null; app.innerHTML = ""; window.scrollTo(0, 0);
+  var vues = { revoir: ["🌙", "À revoir", aRevoir], nouveau: ["✨", "Nouvelles leçons", estNouvelle] };
+  var liste = null, titre = null;
+  if (VUE && vues[VUE]) { liste = LESSONS.filter(vues[VUE][2]); titre = vues[VUE][0] + " " + vues[VUE][1]; }
+  else if (VUE) { liste = LESSONS.filter(function (l) { return themeOf(l) === VUE; }).sort(ordreMethode); titre = themeInfo(VUE).icon + " " + themeInfo(VUE).label; }
+  if (liste && !liste.length) { VUE = null; liste = null; }
+
+  /* écran d'un thème : les leçons dans l'ordre de la méthode */
+  if (liste) {
+    var retour = h("button", { class: "iconbtn", type: "button", id: "btn-themes", "aria-label": "Retour aux thèmes", text: "🏠",
+      onclick: function () { VUE = null; renderHome(); } });
+    app.appendChild(h("header", { class: "top home" }, retour, h("h1", { id: "titre-vue", text: titre })));
+    app.appendChild(h("div", { class: "lecons" }, liste.map(carteLecon)));
+    setNext("⬅ Mes thèmes", function () { VUE = null; renderHome(); });
+    return;
+  }
+
+  /* accueil : raccourcis, puis les thèmes de chaque matière */
+  var r = reglages();
+  app.appendChild(h("header", { class: "top home" }, h("h1", { text: r.prenom ? "Bonjour " + r.prenom + " ! 👋" : "Mes révisions 📚" })));
+  if (!LESSONS.length) app.appendChild(h("div", { class: "card end" }, h("div", { class: "big", text: "🌱" }), h("p", { text: "Pas encore de leçon. Elles arriveront bientôt !" })));
+  var raccourcis = [];
+  ["revoir", "nouveau"].forEach(function (k) {
+    var n = LESSONS.filter(vues[k][2]).length;
+    if (n) raccourcis.push(h("button", { class: "raccourci " + k, type: "button", "data-vue": k, onclick: function () { VUE = k; renderHome(); } },
+      h("span", { class: "ic", "aria-hidden": "true", text: vues[k][0] }),
+      h("span", { class: "corps" }, h("span", { class: "titre", text: vues[k][1] }), h("span", { class: "sous", text: n + " leçon" + (n > 1 ? "s" : "") }))));
+  });
+  if (raccourcis.length) app.appendChild(h("div", { class: "raccourcis" }, raccourcis));
+
+  var groupes = {};
+  LESSONS.forEach(function (l) { var k = themeOf(l); (groupes[k] = groupes[k] || []).push(l); });
+  ORDRE_MATIERES.forEach(function (mat) {
+    var keys = THEMES.filter(function (x) { return x.matiere === mat; }).map(function (x) { return x.key; }).concat(["m:" + mat])
+      .filter(function (k) { return groupes[k]; });
+    if (!keys.length) return;
+    app.appendChild(h("h2", { class: "matiere", text: (MATIERES[mat] || MATIERES.autre).label }));
+    app.appendChild(h("div", { class: "themes" }, keys.map(function (k) {
+      var ls = groupes[k], ti = themeInfo(k), nv = ls.filter(estNouvelle).length;
+      return h("button", { class: "theme-tile", type: "button", "data-theme": k, onclick: function () { VUE = k; renderHome(); } },
+        h("span", { class: "ic", "aria-hidden": "true", text: ti.icon }),
+        h("span", { class: "corps" }, h("span", { class: "titre", text: ti.label }),
+          h("span", { class: "sous", text: ls.length + " leçon" + (ls.length > 1 ? "s" : "") }),
+          nv ? h("span", { class: "nouveau", text: nv + " nouvelle" + (nv > 1 ? "s" : "") + " ✨" }) : null));
+    })));
+  });
+  if (info && info.illisibles) app.appendChild(h("p", { class: "parentnote", text: info.illisibles + " leçon(s) illisible(s) : le mot de passe a peut-être changé (zone parent > Verrouiller)." }));
+  app.appendChild(piedParent());
+}
+
+/* zone parent : leçons par thème du programme, thèmes encore vides compris */
+function cartePrograme() {
+  var groupes = {};
+  LESSONS.forEach(function (l) { var k = themeOf(l); (groupes[k] = groupes[k] || []).push(l); });
+  var lignes = [];
+  ["francais", "mathematiques"].forEach(function (mat) {
+    lignes.push(h("div", { class: "label", text: MATIERES[mat].label }));
+    THEMES.filter(function (x) { return x.matiere === mat; }).forEach(function (x) {
+      var ls = (groupes[x.key] || []).slice().sort(ordreMethode);
+      lignes.push(ls.length
+        ? h("details", { class: "prog", "data-theme": x.key }, h("summary", { text: x.icon + " " + x.label + " : " + ls.length + " leçon" + (ls.length > 1 ? "s" : "") }),
+            h("ul", null, ls.map(function (l) { return h("li", { text: plain(l.meta.titre) + (l.meta.theme ? "" : " (thème deviné)") }); })))
+        : h("p", { class: "prog vide", "data-theme": x.key, text: x.icon + " " + x.label + " : pas encore de leçon" }));
+    });
+  });
+  return h("div", { class: "card", id: "programme" }, h("div", { class: "label", text: "Programme de CE2 : leçons par thème" }), lignes);
 }
 
 function renderParent(msg) {
@@ -819,6 +922,7 @@ function renderParent(msg) {
     h("p", { text: LESSONS.length + " leçon(s) sur cet appareil." }),
     act("🔄 Recharger les leçons", "btn-recharger", function () { boot(); }),
     h("div", { class: "label", text: "Ajouter une leçon depuis un fichier (secours)" }), file));
+  app.appendChild(cartePrograme());
   app.appendChild(h("div", { class: "card" }, h("div", { class: "label", text: "Progression" }),
     act("♻️ Remettre toute la progression à zéro", "btn-raz", function () {
       Object.keys(localStorage).forEach(function (k) { if (k.indexOf("prog:") === 0) localStorage.removeItem(k); });
@@ -842,7 +946,7 @@ function boot() {
     window.__cle = key;
     return loadLessons(key).then(function (info) {
       if (info.total === 0 && info.illisibles > 0) return idb.del("cle").then(function () { renderLogin("Le mot de passe a changé : saisissez le nouveau."); });
-      renderHome(info);
+      VUE = null; renderHome(info);
     });
   }).catch(function (e) { app.innerHTML = ""; app.appendChild(h("div", { class: "fatal", text: "Erreur au démarrage : " + e.message })); });
 }

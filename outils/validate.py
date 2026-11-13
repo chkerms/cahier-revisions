@@ -23,6 +23,10 @@ LANGS = {"en": "en-GB", "de": "de-DE", "es": "es-ES", "it": "it-IT"}
 # Durées moyennes estimées (secondes) pour un élève de CE1 ; hypothèse à recaler sur usage réel.
 DUREES = {"bloc": 20, "carte": 25, "quiz": 30, "calcul": 25, "oral": 60, "vers": 15}
 DUREE_MAX = 10 * 60
+# thèmes de l'accueil, par matière (même liste que THEMES dans app.js)
+THEMES = {"francais": ["grammaire", "conjugaison", "dictee", "vocabulaire", "poesie"],
+          "mathematiques": ["nombres", "fractions", "operations", "calcul_mental", "mesures", "heure", "geometrie",
+                            "monnaie", "problemes", "donnees"]}
 
 
 # ---------------------------------------------------------------- balisage
@@ -267,6 +271,16 @@ def validate(d):
         E(path, "[schéma] " + short(e))
     if schema_errs:
         return errors, warnings  # les règles suivantes supposent une structure valide
+
+    # thème de l'accueil
+    mat, th = d["meta"]["matiere"], d["meta"].get("theme")
+    if mat in THEMES:
+        if not th:
+            W("meta/theme", f"absent : l'appli devinera le thème ; préciser l'un de {', '.join(THEMES[mat])}")
+        elif th not in THEMES[mat]:
+            E("meta/theme", f"« {th} » n'est pas un thème de {mat} ({', '.join(THEMES[mat])})")
+    elif th:
+        E("meta/theme", f"pas de thème pour la matière {mat}")
 
     blocs = {b["id"]: b for b in d["lecon"]["blocs"]}
     pages = {s["id"] for s in d["meta"].get("sources", [])}

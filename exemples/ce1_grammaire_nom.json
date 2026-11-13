@@ -8,6 +8,7 @@
     "periode": 2,
     "matiere": "francais",
     "domaine": "grammaire",
+    "theme": "grammaire",
     "type_lecon": "notion",
     "niveau": "CE1",
     "sources": [

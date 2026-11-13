@@ -1,5 +1,5 @@
 /* Service worker : l'appli marche hors ligne ; les leçons sont toujours cherchées en ligne d'abord. */
-var V = "cahier-v1.3.0";
+var V = "cahier-v1.4.0";
 var SHELL = ["./", "index.html", "app.js", "generateurs.js", "manifest.webmanifest", "fonts/andika-400.woff2", "fonts/andika-700.woff2", "icons/icon-192.png", "icons/icon-512.png"];
 self.addEventListener("install", function (e) {
   e.waitUntil(caches.open(V).then(function (c) { return c.addAll(SHELL); }).then(function () { return self.skipWaiting(); }));
