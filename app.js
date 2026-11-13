@@ -1,10 +1,10 @@
 /* Cahier de révisions : lecteur de leçons chiffrées. Aucune dépendance externe. */
 "use strict";
 (function () {
-var VERSION = "1.6.0";
+var VERSION = "1.7.0";
 var app = document.getElementById("app");
 var nextBar = document.getElementById("next");
-var D = null, IMG = {}, LESSONS = [], VUE = null;
+var D = null, IMG = {}, LESSONS = [], VUE = null, CTX = null; /* CTX : leçon d'origine de la question affichée (quiz transverse) */
 
 /* ------------------------------------------------------------ réglages et stockage */
 function reglages() { try { return JSON.parse(localStorage.getItem("reglages") || "{}"); } catch (e) { return {}; } }
@@ -105,7 +105,8 @@ var journal = {
   debut: function (l) {
     var now = new Date().toISOString(), pid = profils.actifId();
     this.s = { id: pid + ":" + now + ":" + Math.random().toString(36).slice(2, 7), profil: pid, debut: now, fin: now,
-      type: "lecon", lecon: l.meta.id, titre: plain(l.meta.titre), matiere: l.meta.matiere, parcours: (l.parcours || []).slice(),
+      type: l._quiz ? "quiz_transverse" : "lecon", mode: l._quiz || null,
+      lecon: l.meta.id, titre: plain(l.meta.titre), matiere: l.meta.matiere, parcours: (l.parcours || []).slice(),
       etapes: { vues: [], finies: [], sautees: [] }, terminee: false, ev: [] };
     this.save();
   },
@@ -224,7 +225,7 @@ var COULEURS = { rouge: "--c-rouge", bleu: "--c-bleu", vert: "--c-vert", noir: "
 var SURLIGNES = { surligne_jaune: "--h-jaune", surligne_vert: "--h-vert", surligne_rose: "--h-rose" };
 
 function styleSpan(key, content) {
-  var st = (D.styles || {})[key] || {}, cls = [], css = "";
+  var st = ((CTX || D).styles || {})[key] || {}, cls = [], css = "";
   if (COULEURS[st.couleur]) css += "color:var(" + COULEURS[st.couleur] + ");";
   if (SURLIGNES[st.couleur]) css += "background:var(" + SURLIGNES[st.couleur] + ");border-radius:.15em;padding:0 .1em;";
   if (st.souligne) cls.push("st-souligne");
@@ -581,9 +582,11 @@ function stepQuiz(main) {
       setProgress(1); setNext(nextLabel(), goNext); return;
     }
     var q = D.quiz[qi], tries = 0, solved = false, faux = [], evt = null;
+    CTX = q._src || null;
     function noteQuiz(ok) {
       var c = { essais: tries, faux: faux.slice(), resolu: ok };
-      if (evt) journal.maj(evt, c); else { c.k = "quiz"; c.id = q.id; c.q = plain(txt(q.question)); evt = journal.ev(c); }
+      if (evt) journal.maj(evt, c);
+      else { c.k = "quiz"; c.id = q._qid || q.id; c.q = plain(txt(q.question)); origine(c, q); evt = journal.ev(c); }
     }
     var opts = shuffle([{ e: q.reponse, ok: true }].concat(q.distracteurs.map(function (d) { return { e: d, ok: false }; })));
     var qsay = sayBtn(function () { return segOf(q.question); });
@@ -712,15 +715,20 @@ function stepOral(main) {
 
 /* ------------------------------------------------------------ fin */
 function renderEnd() {
-  TTS.stop();
+  TTS.stop(); CTX = null;
   var main = shell(); setProgress(1); setNext(null);
   var nom = reglagesProfil().prenom ? " " + reglagesProfil().prenom : "";
-  var pr = store.get(); store.patch({ fini: true, best: Math.max(pr.best || 0, state.stars) });
+  if (!D._quiz) { var pr = store.get(); store.patch({ fini: true, best: Math.max(pr.best || 0, state.stars) }); }
+  var revoir = D._quiz ? leconsARevoir() : [];
   journal.marque({ terminee: true, etoiles: state.stars });
   main.appendChild(h("div", { class: "card end", id: "fin" }, h("div", { class: "big", text: "🏆" }),
     h("h2", { text: "Bravo" + nom + " !" }), h("p", { text: "Tu as gagné " + state.stars + " étoile" + (state.stars > 1 ? "s" : "") + " ⭐" }),
+    revoir.length ? h("div", { class: "a-revoir", id: "a-revoir" }, h("p", { text: "📖 Pour progresser, relis " + (revoir.length > 1 ? "ces leçons" : "cette leçon") + " :" }),
+      revoir.map(function (l) { return h("button", { class: "btn soft", type: "button", "data-revoir": l.meta.id, onclick: function () { openLesson(l); } }, "📖 Revoir ", rich(l.meta.titre)); })) : null,
     h("div", { class: "actions" },
-      h("button", { class: "btn", type: "button", text: "🔁 Recommencer", onclick: function () { state = { step: 0, done: {}, stars: 0 }; journal.debut(D); render(); } }),
+      h("button", { class: "btn", type: "button", text: "🔁 Recommencer", onclick: function () {
+        if (D._quiz) return openQuiz(D._quiz);
+        state = { step: 0, done: {}, stars: 0 }; journal.debut(D); render(); } }),
       h("button", { class: "btn primary", type: "button", id: "btn-retour", text: "🏠 Mes leçons", onclick: function () { renderHome(); } }))));
   if (TTS.auto) TTS.speak([{ text: "Bravo" + nom + " ! Tu as gagné " + state.stars + " étoiles.", lang: "fr-FR" }]);
 }
@@ -744,9 +752,11 @@ function stepCalculs(main) {
       setProgress(1); setNext(nextLabel(), goNext); return;
     }
     var c = CAL[ci], val = "", tries = 0, done = false, saisies = [], evt = null;
+    CTX = c._src || null;
     function note(ok, fini) {
       var o = { saisies: saisies.slice(), reussi: ok, fini: fini };
-      if (evt) journal.maj(evt, o); else { o.k = "calcul"; o.id = c.id; o.gen = c.genere || null; o.consigne = plain(txt(c.consigne)); o.attendu = String(c.reponse); evt = journal.ev(o); }
+      if (evt) journal.maj(evt, o);
+      else { o.k = "calcul"; o.id = c._qid || c.id; o.gen = c.genere || null; o.consigne = plain(txt(c.consigne)); o.attendu = String(c.reponse); origine(o, c); evt = journal.ev(o); }
     }
     var csay = sayBtn(function () { return segOf(c.consigne); });
     var gauche = h("div", { class: "cgauche" }), droite = h("div", { class: "cdroite" });
@@ -819,7 +829,7 @@ function saisiePoeme(b) {
 
 /* ------------------------------------------------------------ ouverture d'une leçon */
 function openLesson(lesson) {
-  D = lesson; BLOCS = {}; IMG = {};
+  D = lesson; BLOCS = {}; IMG = {}; CTX = null;
   D.lecon.blocs.forEach(function (b) { BLOCS[b.id] = b; if (b.saisie_parent) b.strophes = poemeLocal(b); });
   (D.images || []).forEach(function (im) {
     if (im.svg) IMG[im.id] = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(im.svg);
@@ -829,6 +839,143 @@ function openLesson(lesson) {
   state = { step: 0, done: {}, stars: 0 };
   journal.debut(D);
   render();
+}
+
+/* ------------------------------------------------------------ mode quiz (activé par le parent, par profil) */
+var QUIZ_TYPES = [
+  { id: "francais", icon: "🎯", label: "Quiz français", matiere: "francais" },
+  { id: "maths", icon: "🔢", label: "Quiz maths", matiere: "mathematiques" },
+  { id: "surprise", icon: "🎲", label: "Quiz surprise", matiere: null }
+];
+var QUIZ_N = 10, QUIZ_CALCULS = 3, QUIZ_MIN = 5, QUIZ_PAR_LECON = 2, QUIZ_JOURS_RATES = 30;
+function quizType(id) { return QUIZ_TYPES.filter(function (t) { return t.id === id; })[0]; }
+function reglagesQuiz() { var q = reglagesProfil().quiz || {}; return { francais: !!q.francais, maths: !!q.maths, surprise: !!q.surprise, reservoir: q.reservoir === "ouvertes" ? "ouvertes" : "toutes" }; }
+function setReglagesQuiz(o) { var q = reglagesQuiz(); for (var k in o) q[k] = o[k]; setReglagesProfil({ quiz: q }); }
+/* leçons du réservoir : toutes les leçons publiées, ou seulement celles que ce profil a ouvertes */
+function reservoirQuiz(type) {
+  var t = quizType(type), r = reglagesQuiz();
+  return LESSONS.filter(function (l) {
+    return (!t.matiere || l.meta.matiere === t.matiere) && (r.reservoir === "toutes" || store.get(l.meta.id).ouvert);
+  });
+}
+function nbQuestions(type) { return reservoirQuiz(type).reduce(function (n, l) { return n + ((l.quiz || []).length); }, 0); }
+function nbGenerateurs(type) { return reservoirQuiz(type).reduce(function (n, l) { return n + (l.meta.matiere === "mathematiques" ? (l.generateurs || []).length : 0); }, 0); }
+function tailleQuiz(type) {
+  var nq = nbQuestions(type), calc = type !== "francais" && nbGenerateurs(type) && window.GENERATEURS ? QUIZ_CALCULS : 0;
+  return Math.min(QUIZ_N - calc, nq) + calc;
+}
+function quizDispo(type) { return reglagesQuiz()[type] && nbQuestions(type) >= QUIZ_MIN; }
+function origine(ev, item) { if (item._src) { ev.lecon = item._src.meta.id; ev.titre = plain(item._src.meta.titre); } }
+/* tirage pondéré sans remise : au plus 2 éléments par leçon, puis on relâche si le réservoir est trop petit */
+function tirer(items, n, poids) {
+  var out = [], reste = items.slice(), parLecon = {};
+  [true, false].forEach(function (limite) {
+    while (out.length < n) {
+      var cand = reste.filter(function (it) { return !limite || (parLecon[it._src.meta.id] || 0) < QUIZ_PAR_LECON; });
+      if (!cand.length) break;
+      var tot = 0; cand.forEach(function (it) { tot += poids(it); });
+      var r = Math.random() * tot, k = 0;
+      for (; k < cand.length - 1; k++) { r -= poids(cand[k]); if (r < 0) break; }
+      var it = cand[k]; out.push(it); reste.splice(reste.indexOf(it), 1);
+      parLecon[it._src.meta.id] = (parLecon[it._src.meta.id] || 0) + 1;
+    }
+  });
+  return out;
+}
+/* questions ratées (ou quittées) ces 30 derniers jours par ce profil : clé leçon/id */
+function questionsRatees(all) {
+  var pid = profils.actifId(), lim = new Date(Date.now() - QUIZ_JOURS_RATES * 864e5).toISOString(), r = {};
+  all.forEach(function (x) {
+    if (x.profil !== pid || x.debut < lim) return;
+    x.ev.forEach(function (e) { if (e.k === "quiz" && (e.essais > 1 || e.resolu === false)) r[(e.lecon || x.lecon) + "/" + e.id] = true; });
+  });
+  return r;
+}
+/* un quiz transverse est une leçon assemblée : blocs, images et identifiants préfixés par la leçon d'origine */
+function assemblerQuiz(type, rates) {
+  var t = quizType(type), pool = reservoirQuiz(type);
+  var qs = [], gens = [];
+  pool.forEach(function (l) {
+    var pre = l.meta.id + "/";
+    (l.quiz || []).forEach(function (q) {
+      var c = JSON.parse(JSON.stringify(q));
+      c._qid = q.id; c.id = pre + q.id; c._src = l;
+      if (c.indice && c.indice.bloc) c.indice.bloc = pre + c.indice.bloc;
+      if (c.image) c.image = pre + c.image;
+      c.ref = (c.ref || []).map(function (b) { return pre + b; });
+      qs.push(c);
+    });
+    if (l.meta.matiere === "mathematiques") (l.generateurs || []).forEach(function (g) { gens.push({ g: g, l: l }); });
+  });
+  var calculs = [];
+  if (type !== "francais" && gens.length && window.GENERATEURS) {
+    gens = shuffle(gens);
+    for (var i = 0; i < QUIZ_CALCULS; i++) {
+      var x = gens[i % gens.length], spec = JSON.parse(JSON.stringify(x.g)); spec.nombre = 1;
+      var ex = window.GENERATEURS.creer([spec])[0];
+      if (!ex) continue;
+      var pre = x.l.meta.id + "/";
+      ex._qid = ex.id; ex.id = pre + ex.id + "-" + i; ex._src = x.l;
+      ex.ref = (ex.ref || []).map(function (b) { return pre + b; });
+      calculs.push(ex);
+    }
+  }
+  var quiz = tirer(qs, QUIZ_N - calculs.length, function (q) { return rates[q._src.meta.id + "/" + q._qid] ? 2 : 1; });
+  var vus = {}, blocs = [], images = [];
+  quiz.concat(calculs).forEach(function (it) {
+    var l = it._src, pre = l.meta.id + "/";
+    if (vus[l.meta.id]) return; vus[l.meta.id] = true;
+    l.lecon.blocs.forEach(function (b) { var c = JSON.parse(JSON.stringify(b)); c.id = pre + b.id; if (c.image) c.image = pre + c.image; blocs.push(c); });
+    (l.images || []).forEach(function (im) { var c = JSON.parse(JSON.stringify(im)); c.id = pre + im.id; images.push(c); });
+  });
+  return {
+    _quiz: type,
+    meta: { id: "quiz-" + type, titre: t.icon + " " + t.label, matiere: t.matiere || "mixte" },
+    parcours: calculs.length ? ["quiz", "calculs"] : ["quiz"],
+    lecon: { blocs: blocs }, images: images, quiz: quiz, calculs: calculs, styles: {}
+  };
+}
+function openQuiz(type) {
+  return journal.lire().then(function (all) {
+    D = assemblerQuiz(type, questionsRatees(all)); BLOCS = {}; IMG = {}; CTX = null;
+    D.lecon.blocs.forEach(function (b) { BLOCS[b.id] = b; });
+    D.images.forEach(function (im) {
+      if (im.svg) IMG[im.id] = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(im.svg);
+      else if (im.data) IMG[im.id] = im.data;
+    });
+    state = { step: 0, done: {}, stars: 0 };
+    journal.debut(D);
+    render();
+  });
+}
+/* fin d'un quiz transverse : les leçons des questions ratées ou quittées */
+function leconsARevoir() {
+  var ids = [];
+  (journal.s ? journal.s.ev : []).forEach(function (e) {
+    var rate = (e.k === "quiz" && (e.essais > 1 || e.resolu === false)) || (e.k === "calcul" && !(e.reussi && e.saisies.length === 1));
+    if (rate && e.lecon && ids.indexOf(e.lecon) < 0) ids.push(e.lecon);
+  });
+  return ids.map(function (id) { return LESSONS.filter(function (l) { return l.meta.id === id; })[0]; }).filter(Boolean);
+}
+function carteModeQuiz() {
+  var r = reglagesQuiz(), pa = profils.actif();
+  function bascule(id) { var o = {}; o[id] = !reglagesQuiz()[id]; setReglagesQuiz(o); renderParent(quizType(id).label + (o[id] ? " activé." : " désactivé.")); }
+  return h("div", { class: "card", id: "mode-quiz" }, h("div", { class: "label", text: "Mode quiz (profil " + pa.libelle + ")" }),
+    h("p", { class: "parentnote", text: "Désactivé par défaut. Chaque quiz activé apparaît sur l'accueil s'il a au moins " + QUIZ_MIN + " questions." }),
+    h("div", { class: "actions" }, QUIZ_TYPES.map(function (t) {
+      return h("button", { class: "btn" + (r[t.id] ? " primary" : ""), type: "button", "data-quiz-type": t.id, "aria-pressed": r[t.id] ? "true" : "false",
+        text: (r[t.id] ? "✓ " : "") + t.icon + " " + t.label, onclick: function () { bascule(t.id); } });
+    })),
+    h("div", { class: "label", text: "Questions tirées dans" }),
+    h("div", { class: "actions" }, [["toutes", "Toutes les leçons publiées"], ["ouvertes", "Les leçons déjà ouvertes"]].map(function (x) {
+      var on = r.reservoir === x[0];
+      return h("button", { class: "btn" + (on ? " primary" : ""), type: "button", "data-reservoir": x[0], "aria-pressed": on ? "true" : "false",
+        text: x[1], onclick: function () { setReglagesQuiz({ reservoir: x[0] }); renderParent("Réservoir du quiz : " + x[1].toLowerCase() + "."); } });
+    })),
+    h("p", { class: "parentnote", id: "quiz-dispo", text: QUIZ_TYPES.map(function (t) {
+      var n = nbQuestions(t.id), g = t.id === "francais" ? 0 : nbGenerateurs(t.id);
+      return t.label + " : " + n + " question" + (n > 1 ? "s" : "") + (g ? " + calculs" : "");
+    }).join(" · ") }));
 }
 
 /* ------------------------------------------------------------ écrans */
@@ -937,7 +1084,7 @@ function carteLecon(l) {
 }
 
 function renderHome(info) {
-  TTS.stop(); setNext(null); D = null; journal.fin(); app.innerHTML = ""; window.scrollTo(0, 0);
+  TTS.stop(); setNext(null); D = null; CTX = null; journal.fin(); app.innerHTML = ""; window.scrollTo(0, 0);
   var vues = { revoir: ["🌙", "À revoir", aRevoir], nouveau: ["✨", "Nouvelles leçons", estNouvelle] };
   var liste = null, titre = null;
   if (VUE && vues[VUE]) { liste = LESSONS.filter(vues[VUE][2]); titre = vues[VUE][0] + " " + vues[VUE][1]; }
@@ -966,6 +1113,12 @@ function renderHome(info) {
       h("span", { class: "corps" }, h("span", { class: "titre", text: vues[k][1] }), h("span", { class: "sous", text: n + " leçon" + (n > 1 ? "s" : "") }))));
   });
   if (raccourcis.length) app.appendChild(h("div", { class: "raccourcis" }, raccourcis));
+  var quiz = QUIZ_TYPES.filter(function (t) { return quizDispo(t.id); });
+  if (quiz.length) app.appendChild(h("div", { class: "raccourcis quiz" }, quiz.map(function (t) {
+    return h("button", { class: "raccourci quiz", type: "button", "data-quiz": t.id, onclick: function () { openQuiz(t.id); } },
+      h("span", { class: "ic", "aria-hidden": "true", text: t.icon }),
+      h("span", { class: "corps" }, h("span", { class: "titre", text: t.label }), h("span", { class: "sous", text: tailleQuiz(t.id) + " questions" })));
+  })));
 
   var groupes = {};
   LESSONS.forEach(function (l) { var k = themeOf(l); (groupes[k] = groupes[k] || []).push(l); });
@@ -1012,11 +1165,20 @@ function genererBilan(all, pid, depuis) {
     var m = (new Date(x.fin) - new Date(x.debut)) / 6e4;
     if (m > DUREE_MAX) { m = DUREE_MAX; plafond = true; }
     minutes += m;
-    if (!lecons[x.lecon]) { lecons[x.lecon] = { titre: x.titre, seances: [] }; ordre.push(x.lecon); }
-    lecons[x.lecon].seances.push(x);
+    /* les réponses d'un quiz transverse sont rangées sous leur leçon d'origine */
+    function lc(id, titre) { if (!lecons[id]) { lecons[id] = { titre: titre, ev: [] }; ordre.push(id); } return lecons[id]; }
+    if (x.type !== "quiz_transverse") lc(x.lecon, x.titre);
+    x.ev.forEach(function (e) { lc(e.lecon || x.lecon, e.titre || x.titre).ev.push(e); });
   });
+  var quizT = S.filter(function (x) { return x.type === "quiz_transverse"; });
   L.push(S.length + " séance" + (S.length > 1 ? "s" : "") + ", " + Math.round(minutes) + " minute" + (Math.round(minutes) > 1 ? "s" : "") +
     " au total" + (plafond ? " (séances longues comptées 30 min)" : "") + ", " + ordre.length + " leçon" + (ordre.length > 1 ? "s" : "") + " travaillée" + (ordre.length > 1 ? "s" : "") + ".");
+  if (quizT.length) {
+    var qe = []; quizT.forEach(function (x) { qe = qe.concat(x.ev.filter(function (e) { return e.k === "quiz" || e.k === "calcul"; })); });
+    var q1 = qe.filter(function (e) { return e.k === "quiz" ? e.essais === 1 && e.resolu !== false : e.reussi && e.saisies.length === 1; }).length;
+    L.push("Dont " + quizT.length + " quiz transverse" + (quizT.length > 1 ? "s" : "") + " (" + quizT.map(function (x) { return x.mode; }).join(", ") + ") : " +
+      q1 + "/" + qe.length + " réponses justes du premier coup. Leurs erreurs sont rangées sous la leçon d'origine.");
+  }
   L.push("Les identifiants entre crochets sont les meta.id des leçons.");
 
   var sautees = S.filter(function (x) { return x.etapes.sautees.some(function (e) { return x.etapes.finies.indexOf(e) < 0; }); });
@@ -1028,8 +1190,7 @@ function genererBilan(all, pid, depuis) {
 
   var aRetravailler = [], acquis = [];
   ordre.forEach(function (id) {
-    var lc = lecons[id], ev = [];
-    lc.seances.forEach(function (x) { ev = ev.concat(x.ev); });
+    var lc = lecons[id], ev = lc.ev;
     var pb = [], ok = [];
     /* quiz : par question, le nombre de fois où elle a demandé plusieurs essais */
     var qz = {}, qn = [];
@@ -1199,6 +1360,7 @@ function renderParent(msg) {
     })),
     h("p", { class: "parentnote", text: "Le profil test garde sa propre progression. L'appli revient au profil Enfant à chaque lancement." })));
   app.appendChild(carteBilan(out));
+  app.appendChild(carteModeQuiz());
   var taille = reglages().taille || "moyenne";
   app.appendChild(h("div", { class: "card" }, h("div", { class: "label", text: "Taille du texte" }),
     h("div", { class: "actions" }, ["petite", "moyenne", "grande"].map(function (k) {
@@ -1249,7 +1411,7 @@ window.addEventListener("error", function (ev) {
   if (document.querySelector(".fatal")) return;
   app.insertBefore(h("div", { class: "fatal", text: "Petit problème d'affichage (" + (ev.message || "erreur") + "). Revenez à l'accueil ou rechargez." }), app.firstChild);
 });
-window.__cahier = { version: VERSION };
+window.__cahier = { version: VERSION, tirer: tirer, assemblerQuiz: assemblerQuiz }; /* exposés pour tests/test_quiz.py */
 appliquerTaille();
 migrerProfils();
 profils.choisir("enfant"); /* chaque lancement repart sur le profil de l'enfant */

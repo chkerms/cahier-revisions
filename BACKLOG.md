@@ -112,7 +112,16 @@ Acquis (premier coup)
 
 ---
 
-## Lot 3 : mode quiz, activable depuis la Zone parent [DEMANDÉ]
+## Lot 3 : mode quiz, activable depuis la Zone parent [DEMANDÉ] · LIVRÉ en 1.7.0 (13/11/2026)
+
+> Livré et testé en Chrome headless (`tests/test_quiz.py`, avec la leçon d'essai `tests/fixtures/essai_quiz_tables.json`) : désactivé par défaut, réglage par profil, réservoir « déjà ouvertes », tirage 2 par leçon et pondération x2, 7 + 3 en maths, images homonymes, styles de la leçon d'origine, « Revoir la leçon », bilan rangé par leçon d'origine.
+> À vérifier sur la tablette : rendu des raccourcis et de l'écran de fin, lecture à voix haute des questions.
+> Écarts avec le cadrage :
+> - pas d'écran dédié : le quiz est une leçon assemblée (étapes Quiz puis Calculs), affichée par les écrans existants ;
+> - quiz français : si le réservoir a moins de 10 questions, toutes sont posées (5 au minimum, sinon le raccourci est masqué) ; l'accueil annonce le nombre réel ;
+> - quiz surprise : 7 questions + 3 calculs dès qu'une leçon de maths du réservoir a des générateurs ;
+> - seuls les `generateurs` alimentent les calculs du quiz, pas les calculs fixes ;
+> - `window.__cahier.tirer` et `window.__cahier.assemblerQuiz` sont exposés pour les tests.
 
 **Besoin.** L'enfant préfère les quiz et saute les leçons qu'elle pense connaître. Le parent veut des quiz transverses (français, maths, mélange), qu'il active lui-même.
 

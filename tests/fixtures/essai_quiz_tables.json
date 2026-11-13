@@ -1,0 +1,225 @@
+{
+ "schema_version": "2.0",
+ "meta": {
+  "id": "essai-quiz-tables",
+  "titre": "Maths, leçon 99 : les tables (essai)",
+  "date": "2026-11-12",
+  "methode": "aucune",
+  "matiere": "mathematiques",
+  "domaine": "calcul",
+  "theme": "calcul_mental",
+  "type_lecon": "notion",
+  "niveau": "CE2",
+  "sources": [],
+  "complete": true,
+  "statut": "pret"
+ },
+ "styles": {
+  "c1": {
+   "couleur": "vert",
+   "gras": true,
+   "signification": "résultat"
+  }
+ },
+ "images": [
+  {
+   "id": "img1",
+   "svg": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 200 150\"><g fill=\"#0A7F5A\"><circle cx=\"30\" cy=\"30\" r=\"14\"/><circle cx=\"75\" cy=\"30\" r=\"14\"/><circle cx=\"120\" cy=\"30\" r=\"14\"/><circle cx=\"165\" cy=\"30\" r=\"14\"/><circle cx=\"30\" cy=\"75\" r=\"14\"/><circle cx=\"75\" cy=\"75\" r=\"14\"/><circle cx=\"120\" cy=\"75\" r=\"14\"/><circle cx=\"165\" cy=\"75\" r=\"14\"/><circle cx=\"30\" cy=\"120\" r=\"14\"/><circle cx=\"75\" cy=\"120\" r=\"14\"/><circle cx=\"120\" cy=\"120\" r=\"14\"/><circle cx=\"165\" cy=\"120\" r=\"14\"/></g></svg>",
+   "description": "Trois rangées de quatre points verts."
+  }
+ ],
+ "lecon": {
+  "blocs": [
+   {
+    "id": "b1",
+    "type": "titre",
+    "texte": "Les tables de 3 et de 4"
+   },
+   {
+    "id": "b2",
+    "type": "regle",
+    "texte": "Multiplier, c'est ajouter plusieurs fois le même nombre. 3 × 4 = {c1:12}."
+   },
+   {
+    "id": "b3",
+    "type": "schema_legende",
+    "image": "img1",
+    "legendes": [
+     {
+      "repere": "1",
+      "libelle": "3 rangées de 4 points"
+     }
+    ]
+   },
+   {
+    "id": "b4",
+    "type": "exemples",
+    "items": [
+     "4 × 3 = 12",
+     "3 × 5 = 15",
+     "4 × 5 = 20",
+     "4 × 4 = 16"
+    ]
+   }
+  ]
+ },
+ "cartes": [
+  {
+   "id": "k1",
+   "recto": "3 × 4 ?",
+   "verso": "12",
+   "ref": [
+    "b2"
+   ]
+  },
+  {
+   "id": "k2",
+   "recto": "3 × 5 ?",
+   "verso": "15",
+   "ref": [
+    "b4"
+   ]
+  },
+  {
+   "id": "k3",
+   "recto": "4 × 5 ?",
+   "verso": "20",
+   "ref": [
+    "b4"
+   ]
+  },
+  {
+   "id": "k4",
+   "recto": "4 × 4 ?",
+   "verso": "16",
+   "ref": [
+    "b4"
+   ]
+  },
+  {
+   "id": "k5",
+   "recto": "Multiplier, c'est…",
+   "verso": "ajouter plusieurs fois le même nombre",
+   "ref": [
+    "b2"
+   ]
+  }
+ ],
+ "quiz": [
+  {
+   "id": "q1",
+   "question": "Combien de points en tout ?",
+   "image": "img1",
+   "reponse": "12",
+   "distracteurs": [
+    "16",
+    "20"
+   ],
+   "indice": {
+    "bloc": "b3"
+   },
+   "ref": [
+    "b3"
+   ]
+  },
+  {
+   "id": "q2",
+   "question": "Combien font 3 × 5 ?",
+   "reponse": "15",
+   "distracteurs": [
+    "12",
+    "20"
+   ],
+   "indice": {
+    "bloc": "b4"
+   },
+   "ref": [
+    "b4"
+   ]
+  },
+  {
+   "id": "q3",
+   "question": "Combien font 4 × 5 ?",
+   "reponse": "20",
+   "distracteurs": [
+    "15",
+    "16"
+   ],
+   "indice": {
+    "bloc": "b4"
+   },
+   "ref": [
+    "b4"
+   ]
+  },
+  {
+   "id": "q4",
+   "question": "Combien font 4 × 4 ?",
+   "reponse": "16",
+   "distracteurs": [
+    "12",
+    "15"
+   ],
+   "indice": {
+    "bloc": "b4"
+   },
+   "ref": [
+    "b4"
+   ]
+  },
+  {
+   "id": "q5",
+   "question": "Combien font 4 × 3 ?",
+   "reponse": "12",
+   "distracteurs": [
+    "16",
+    "15"
+   ],
+   "indice": {
+    "bloc": "b4"
+   },
+   "ref": [
+    "b4"
+   ]
+  }
+ ],
+ "generateurs": [
+  {
+   "id": "g1",
+   "type": "table",
+   "nombre": 4,
+   "params": {
+    "tables": [
+     3,
+     4
+    ]
+   },
+   "ref": [
+    "b2"
+   ]
+  }
+ ],
+ "oral": [
+  {
+   "id": "o1",
+   "question": "Explique 3 × 4 avec les points.",
+   "image": "img1",
+   "points_cles": [
+    "3 rangées de 4 points.",
+    "Cela fait 12."
+   ],
+   "ref": [
+    "b2",
+    "b3"
+   ]
+  }
+ ],
+ "parcours": [
+  "lecon",
+  "cartes",
+  "quiz",
+  "calculs",
+  "oral"
+ ],
+ "alertes_lecture": []
+}

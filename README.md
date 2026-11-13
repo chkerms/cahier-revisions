@@ -8,6 +8,8 @@ Deux profils sur le même appareil : « Enfant » et « Test parent », chacun a
 
 Chaque séance est notée sur l'appareil (étapes faites ou sautées, erreurs de quiz et de calcul, cartes à revoir, oral). La Zone parent en tire un bilan texte, par profil et par période, à envoyer depuis le menu de partage Android (Gmail, appli Claude…), par email ou à télécharger. Le bilan contient le prénom et les titres des leçons : il ne se commite jamais dans ce dépôt.
 
+Mode quiz, activé par le parent dans la Zone parent (par profil) : « Quiz français », « Quiz maths », « Quiz surprise ». 10 questions tirées dans toutes les leçons publiées ou seulement celles déjà ouvertes, au plus 2 par leçon, les questions ratées depuis 30 jours revenant deux fois plus souvent ; en maths, 7 questions puis 3 calculs générés. À la fin, un bouton ouvre la leçon de chaque question ratée.
+
 Le contenu des leçons est chiffré (RSA-OAEP + AES-GCM). Le code est public, les leçons ne le sont pas : elles ne s'ouvrent qu'avec le mot de passe du cahier.
 
 - `index.html`, `app.js`, `sw.js` : l'application (sans dépendance externe)
