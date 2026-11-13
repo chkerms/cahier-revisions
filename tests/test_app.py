@@ -161,6 +161,88 @@ with sync_playwright() as pw:
     p.evaluate("() => { localStorage.removeItem('prog:grammaire-le-nom'); localStorage.setItem('reglages', JSON.stringify({ taille: 'moyenne' })); }")
     p.reload(); p.wait_for_selector(".theme-tile", timeout=20000)
 
+    print("== Journal : séance jouée sur le profil test (cartes et quiz)")
+    zone_parent(); p.click("[data-profil=test]"); p.wait_for_selector("#bandeau-test")
+    p.click("#next-btn"); p.wait_for_selector(".theme-tile")
+    p.click(".theme-tile[data-theme=grammaire]"); p.click(".lecon-card[data-id=grammaire-le-nom]"); p.wait_for_selector("[data-step=cartes]")
+    p.click("#next-btn"); p.wait_for_selector("#flashcard")  # leçon lue, puis cartes
+    premier = p.inner_text("#flashcard .front")
+    for _ in range(40):
+        if p.locator("#flashcard").count() == 0:
+            break
+        recto = p.inner_text("#flashcard .front"); p.click("#flashcard")
+        p.click("#btn-revoir" if recto == premier else "#btn-connais")
+    check(p.locator(".card.end").count() == 1 and "à revoir demain" in p.inner_text("main"), "cartes : la première envoyée à demain")
+    p.click("#next-btn"); p.wait_for_selector(".choices")
+    for i in range(3):
+        p.locator(".choices .btn").nth(i).click()
+        if p.locator(".feedback.good").count():
+            break
+    essais_q1 = i + 1
+    p.click("#btn-home"); p.wait_for_selector(".theme-tile, .lecon-card")
+    p.goto(URL); p.wait_for_selector(".theme-tile", timeout=20000)
+    zone_parent(); p.click("[data-profil=test]"); p.wait_for_selector("#bandeau-test"); p.click("#next-btn"); p.wait_for_selector(".theme-tile")
+    p.click(".theme-tile[data-theme=fractions]"); p.click(".lecon-card[data-id=maths-les-fractions]"); p.click("[data-step=calculs]")
+    tape("9"); p.click("#btn-valider"); p.click("#btn-home"); p.wait_for_selector(".theme-tile, .lecon-card")
+
+    print("== Bilan : profil enfant")
+    p.goto(URL); p.wait_for_selector(".theme-tile", timeout=20000)
+    zone_parent(); p.wait_for_function("window.__bilan !== undefined")
+    check(p.get_attribute("[data-bilan-profil=enfant]", "aria-pressed") == "true", "bilan : profil enfant par défaut")
+    info = p.inner_text("#bilan-info")
+    check(info.startswith("1 séance") and "jamais" in info, f"bilan enfant : 1 séance, jamais envoyé ({info})")
+    b = p.evaluate("window.__bilan")
+    check("[maths-les-fractions]" in b and "grammaire-le-nom" not in b, "bilan enfant : sa leçon seulement, rien du profil test")
+    check("ÉTAPES SAUTÉES : 1 séance sur 1" in b and "ma leçon, cartes, quiz" in b, "bilan : étapes sautées (leçon, cartes, quiz)")
+    check("attendu 472, saisi 471 puis 472" in b, "bilan : calcul réussi au 2e essai, avec les saisies")
+    check("attendu 3, saisi 5 puis 5 puis 5 (non trouvé)" in b, "bilan : calcul non trouvé après 3 essais")
+    check("calculs 1/3 du premier coup" not in b.split("ACQUIS")[1].split("DÉTAIL")[0], "leçon avec erreurs absente des acquis")
+    m = re.search(r"--- DONNÉES BRUTES \(JSON\) ---\n(.*)\n--- FIN ---", b, re.S)
+    import json
+    brut = json.loads(m.group(1)) if m else {}
+    check(brut.get("profil") == "enfant" and len(brut.get("seances", [])) == 1 and brut["seances"][0]["terminee"], "bilan : JSON brut lisible et cohérent")
+    oral = [e for e in brut["seances"][0]["ev"] if e["k"] == "oral"] if brut else []
+    check(len(oral) == 1 and oral[0]["valide"], "journal : oral validé enregistré")
+    shot(p, "e_bilan.png")
+
+    print("== Bilan : profil test")
+    p.click("[data-bilan-profil=test]"); p.wait_for_function("window.__bilan && window.__bilan.indexOf('profil Test parent') > 0")
+    b = p.evaluate("window.__bilan")
+    check("[grammaire-le-nom]" in b and '"profil":"enfant"' not in b, "bilan test : ses séances seulement")
+    check("cartes à revoir demain" in b, "bilan test : carte envoyée à demain")
+    check("saisi 9 (calcul quitté en cours)" in b, "bilan test : calcul quitté après une erreur, visible")
+    if essais_q1 > 1:
+        check("raté du premier coup 1 fois sur 1" in b, f"bilan test : question ratée ({essais_q1} essais)")
+    else:
+        check("raté du premier coup" not in b and '"k":"quiz"' in b and '"essais":1' in b, "bilan test : question réussie du premier coup (journal brut)")
+
+    print("== Bilan : envoi (téléchargement) et période « depuis le dernier envoi »")
+    p.click("[data-bilan-profil=enfant]"); p.wait_for_function("window.__bilan && window.__bilan.indexOf('profil Enfant') > 0")
+    texte = p.evaluate("window.__bilan")
+    with p.expect_download() as dl:
+        p.click("#btn-telecharger")
+    d = dl.value
+    check(re.fullmatch(r"bilan-\d{4}-\d{2}-\d{2}\.txt", d.suggested_filename) is not None, f"fichier {d.suggested_filename}")
+    check(Path(d.path()).read_text(encoding="utf-8") == texte, "contenu du fichier = bilan affiché")
+    p.click("#btn-partager")
+    check(p.locator(".erreur").inner_text() != "", "partage : repli expliqué si le navigateur ne partage pas de fichier")
+    p.click("[data-periode=envoi]"); p.wait_for_function("document.querySelector('#bilan-info').textContent.indexOf('séance') >= 0")
+    info = p.inner_text("#bilan-info")
+    check(info.startswith("0 séance") and "jamais" not in info, f"après envoi : période vide, date d'envoi affichée ({info})")
+    check(p.is_disabled("#btn-partager"), "rien à envoyer : boutons désactivés")
+    p.click("[data-periode=tout]"); p.wait_for_function("document.querySelector('#bilan-info').textContent.indexOf('1 séance') === 0")
+    check(True, "période « Tout » : la séance revient")
+
+    print("== Journal : purge au-delà de 180 jours")
+    p.evaluate("""() => new Promise(res => { const r = indexedDB.open('cahier', 2); r.onsuccess = () => {
+      const tx = r.result.transaction('seances', 'readwrite');
+      tx.objectStore('seances').put({ id: 'enfant:vieux', profil: 'enfant', debut: '2020-01-01T10:00:00.000Z', fin: '2020-01-01T10:05:00.000Z', etapes: { vues: [], finies: [], sautees: [] }, ev: [] });
+      tx.oncomplete = () => res(); }; })""")
+    p.reload(); p.wait_for_selector(".theme-tile", timeout=20000); p.wait_for_timeout(500)
+    reste = p.evaluate("""() => new Promise(res => { const r = indexedDB.open('cahier', 2); r.onsuccess = () => {
+      const q = r.result.transaction('seances').objectStore('seances').get('enfant:vieux'); q.onsuccess = () => res(!!q.result); }; })""")
+    check(not reste, "séance de plus de 180 jours supprimée au lancement")
+
     print("== Hors ligne (service worker)")
     p.wait_for_function("navigator.serviceWorker && navigator.serviceWorker.controller !== null", timeout=15000)
     ctx.set_offline(True)

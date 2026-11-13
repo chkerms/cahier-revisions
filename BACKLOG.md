@@ -42,7 +42,17 @@ Légende : **[DEMANDÉ]** demandé par le parent · **[PROPOSÉ]** proposition d
 
 ---
 
-## Lot 2 : journal des révisions et export par email [DEMANDÉ]
+## Lot 2 : journal des révisions et export par email [DEMANDÉ] · LIVRÉ en 1.6.0 (13/11/2026)
+
+> Livré et testé en Chrome headless (`tests/test_app.py`, sections « Journal » et « Bilan ») : séances, cartes, quiz, calculs, oral, étapes sautées, bilan par profil, téléchargement, période « depuis le dernier envoi », purge à 180 jours.
+> Non testable en headless, à vérifier sur la tablette : le menu de partage Android (Gmail, appli Claude) et le bouton Email (`mailto:`).
+> Écarts avec le cadrage :
+> - store IndexedDB `seances` (une fiche par séance, réécrite à chaque événement) au lieu d'un store `journal` d'événements ;
+> - une étape est « finie » dans le journal dès que son écran de résultat s'affiche, même si l'enfant change d'étape par la barre au lieu du bouton Suivant ;
+> - une question de quiz ou un calcul quitté après une erreur est enregistré (« question quittée sans la bonne réponse », « calcul quitté en cours ») ;
+> - durée d'une séance plafonnée à 30 minutes dans le total (appli restée ouverte) ;
+> - l'adresse email est commune à l'appareil (`reglages.email`), la date du dernier envoi est par profil (`reglages:<profil>.dernier_envoi`) ;
+> - le choix de période se fait par boutons dans la carte « Bilan des révisions » de la Zone parent.
 
 **Besoin.** Le parent récupère ce que l'enfant a fait (et raté), l'envoie par email ou directement à Claude, pour que les prochaines leçons ciblent les difficultés.
 

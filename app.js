@@ -1,7 +1,7 @@
 /* Cahier de révisions : lecteur de leçons chiffrées. Aucune dépendance externe. */
 "use strict";
 (function () {
-var VERSION = "1.5.0";
+var VERSION = "1.6.0";
 var app = document.getElementById("app");
 var nextBar = document.getElementById("next");
 var D = null, IMG = {}, LESSONS = [], VUE = null;
@@ -25,8 +25,10 @@ var profils = {
   actif: function () { return this.get(this.actifId()); },
   choisir: function (id) { if (!this.get(id)) return; try { localStorage.setItem("profil_actif", id); } catch (e) {} majBandeau(); }
 };
-function reglagesProfil() { try { return JSON.parse(localStorage.getItem("reglages:" + profils.actifId()) || "{}"); } catch (e) { return {}; } }
-function setReglagesProfil(o) { var r = reglagesProfil(); for (var k in o) r[k] = o[k]; try { localStorage.setItem("reglages:" + profils.actifId(), JSON.stringify(r)); } catch (e) {} }
+function reglagesDe(id) { try { return JSON.parse(localStorage.getItem("reglages:" + id) || "{}"); } catch (e) { return {}; } }
+function setReglagesDe(id, o) { var r = reglagesDe(id); for (var k in o) r[k] = o[k]; try { localStorage.setItem("reglages:" + id, JSON.stringify(r)); } catch (e) {} }
+function reglagesProfil() { return reglagesDe(profils.actifId()); }
+function setReglagesProfil(o) { setReglagesDe(profils.actifId(), o); }
 /* 1.4.0 → profils : une seule fois, sans rien perdre (clés prog:<leçon> et prénom global vers le profil enfant) */
 function migrerProfils() {
   try {
@@ -69,16 +71,21 @@ var idb = {
     if (self.db) return Promise.resolve(self.db);
     return new Promise(function (res, rej) {
       if (!window.indexedDB) return rej(new Error("IndexedDB indisponible"));
-      var r = indexedDB.open("cahier", 1);
-      r.onupgradeneeded = function () { r.result.createObjectStore("kv"); };
+      var r = indexedDB.open("cahier", 2);
+      r.onupgradeneeded = function () {
+        var db = r.result;
+        if (!db.objectStoreNames.contains("kv")) db.createObjectStore("kv");
+        if (!db.objectStoreNames.contains("seances")) db.createObjectStore("seances", { keyPath: "id" });
+      };
       r.onsuccess = function () { self.db = r.result; res(self.db); };
       r.onerror = function () { rej(r.error); };
     });
   },
-  op: function (mode, fn) {
+  op: function (mode, fn, nom) {
+    nom = nom || "kv";
     return this.open().then(function (db) {
       return new Promise(function (res, rej) {
-        var tx = db.transaction("kv", mode), st = tx.objectStore("kv"), q = fn(st);
+        var tx = db.transaction(nom, mode), st = tx.objectStore(nom), q = fn(st);
         tx.oncomplete = function () { res(q && q.result); };
         tx.onerror = function () { rej(tx.error); };
       });
@@ -87,6 +94,40 @@ var idb = {
   get: function (k) { return this.op("readonly", function (s) { return s.get(k); }); },
   put: function (k, v) { return this.op("readwrite", function (s) { return s.put(v, k); }); },
   del: function (k) { return this.op("readwrite", function (s) { return s.delete(k); }); }
+};
+
+/* ------------------------------------------------------------ journal des séances (IndexedDB, store « seances ») */
+/* Une séance = ouverture d'une leçon jusqu'au retour à l'accueil. Elle est réécrite à chaque événement :
+   rien n'est perdu si l'appli est fermée en cours de route. Conservation : 180 jours. */
+var JOURNAL_JOURS = 180;
+var journal = {
+  s: null,
+  debut: function (l) {
+    var now = new Date().toISOString(), pid = profils.actifId();
+    this.s = { id: pid + ":" + now + ":" + Math.random().toString(36).slice(2, 7), profil: pid, debut: now, fin: now,
+      type: "lecon", lecon: l.meta.id, titre: plain(l.meta.titre), matiere: l.meta.matiere, parcours: (l.parcours || []).slice(),
+      etapes: { vues: [], finies: [], sautees: [] }, terminee: false, ev: [] };
+    this.save();
+  },
+  etape: function (k, nom) { if (!this.s) return; var l = this.s.etapes[k]; if (l.indexOf(nom) < 0) { l.push(nom); this.save(); } },
+  marque: function (o) { if (!this.s) return; for (var k in o) this.s[k] = o[k]; this.save(); },
+  ev: function (o) { if (!this.s) return o; o.t = new Date().toISOString(); this.s.ev.push(o); this.save(); return o; },
+  maj: function (o, champs) { for (var k in champs) o[k] = champs[k]; this.save(); },
+  fin: function () { this.s = null; },
+  save: function () {
+    var s = this.s; if (!s) return;
+    s.fin = new Date().toISOString();
+    idb.op("readwrite", function (st) { return st.put(s); }, "seances").catch(function () {});
+  },
+  lire: function () { return idb.op("readonly", function (st) { return st.getAll(); }, "seances").then(function (r) { return r || []; }).catch(function () { return []; }); },
+  purger: function () {
+    var limite = new Date(Date.now() - JOURNAL_JOURS * 864e5).toISOString();
+    return this.lire().then(function (all) {
+      var vieux = all.filter(function (x) { return x.debut < limite; });
+      if (!vieux.length) return;
+      return idb.op("readwrite", function (st) { vieux.forEach(function (x) { st.delete(x.id); }); return null; }, "seances");
+    }).catch(function () {});
+  }
 };
 
 /* ------------------------------------------------------------ chiffrement (WebCrypto) */
@@ -418,6 +459,7 @@ function setNext(label, fn, cls) {
 }
 function goNext() {
   state.done[D.parcours[state.step]] = true;
+  journal.etape("finies", D.parcours[state.step]);
   if (state.step < D.parcours.length - 1) { state.step++; render(); } else renderEnd();
 }
 function nextLabel() {
@@ -438,7 +480,10 @@ function shell() {
   app.appendChild(h("header", { class: "top" }, homeBtn, h("h1", null, rich(D.meta.titre)), starsEl, autoBtn, fsBtn));
   app.appendChild(h("nav", { class: "steps" + (D.parcours.length >= 5 ? " many" : ""), "aria-label": "Étapes" }, D.parcours.map(function (s, i) {
     return h("button", { class: "step", type: "button", "aria-label": STEP_META[s].label, "aria-current": i === state.step ? "step" : null, "data-step": s,
-      onclick: function () { TTS.stop(); state.step = i; render(); } },
+      onclick: function () {
+        TTS.stop();
+        for (var j = 0; j < i; j++) if (!state.done[D.parcours[j]]) journal.etape("sautees", D.parcours[j]);
+        state.step = i; render(); } },
       h("span", { "aria-hidden": "true", text: STEP_META[s].icon }), h("span", { class: "lbl", text: STEP_META[s].label }), state.done[s] ? h("span", { class: "done", text: " ✓" }) : null);
   })));
   app.appendChild(h("div", { class: "bar", id: "bar" }, h("i")));
@@ -450,6 +495,7 @@ function render() {
   TTS.stop();
   var main = shell(), s = D.parcours[state.step];
   window.scrollTo(0, 0);
+  journal.etape("vues", s);
   ({ lecon: stepLecon, cartes: stepCartes, quiz: stepQuiz, calculs: stepCalculs, recitation: stepRecitation, oral: stepOral })[s](main);
 }
 
@@ -482,11 +528,13 @@ function stepCartes(main) {
     var btns = h("div", { class: "actions", hidden: true },
       h("button", { class: "btn soft", type: "button", id: "btn-revoir", text: "🔁 À revoir", onclick: function () {
         cur.passes++; queue.shift();
-        if (cur.passes >= 3) { later.push(cur.c); toast("On la reverra demain 🌙"); }
+        if (cur.passes >= 3) { later.push(cur.c); toast("On la reverra demain 🌙");
+          journal.ev({ k: "carte", id: cur.c.id, recto: plain(txt(cur.c.recto)), revoir: cur.passes, demain: true }); }
         else queue.push(cur);
         show(); } }),
       h("button", { class: "btn ok", type: "button", id: "btn-connais", text: "✅ Je connais", onclick: function () {
-        queue.shift(); known.push(cur.c); if (cur.passes === 0) addStar(); show(); } }));
+        queue.shift(); known.push(cur.c); if (cur.passes === 0) addStar();
+        journal.ev({ k: "carte", id: cur.c.id, recto: plain(txt(cur.c.recto)), revoir: cur.passes, demain: false }); show(); } }));
     function doFlip() {
       flipped = !flipped; flip.classList.toggle("flipped", flipped);
       btns.hidden = !flipped;
@@ -505,6 +553,7 @@ function stepCartes(main) {
     if (TTS.auto) TTS.speak(segOf(cur.c.recto), front.querySelector(".say"));
   }
   function finish() {
+    journal.etape("finies", "cartes");
     var st = store.get(); st.demain = later.map(function (c) { return c.id; }); store.set(st);
     zone.appendChild(h("div", { class: "card end" }, h("div", { class: "big", text: "🎉" }),
       h("p", { text: "Tu connais " + known.length + " carte" + (known.length > 1 ? "s" : "") + " sur " + total + " !" }),
@@ -526,11 +575,16 @@ function stepQuiz(main) {
     var zone = h("div", { class: "qzone" }); main.appendChild(zone);
     setProgress(qi / D.quiz.length);
     if (qi >= D.quiz.length) {
+      journal.etape("finies", "quiz");
       zone.appendChild(h("div", { class: "card end" }, h("div", { class: "big", text: firstTry >= 4 ? "🏆" : "🎉" }),
         h("p", { text: "Tu as trouvé " + firstTry + " réponse" + (firstTry > 1 ? "s" : "") + " du premier coup sur " + D.quiz.length + " !" })));
       setProgress(1); setNext(nextLabel(), goNext); return;
     }
-    var q = D.quiz[qi], tries = 0, solved = false;
+    var q = D.quiz[qi], tries = 0, solved = false, faux = [], evt = null;
+    function noteQuiz(ok) {
+      var c = { essais: tries, faux: faux.slice(), resolu: ok };
+      if (evt) journal.maj(evt, c); else { c.k = "quiz"; c.id = q.id; c.q = plain(txt(q.question)); evt = journal.ev(c); }
+    }
     var opts = shuffle([{ e: q.reponse, ok: true }].concat(q.distracteurs.map(function (d) { return { e: d, ok: false }; })));
     var qsay = sayBtn(function () { return segOf(q.question); });
     zone.appendChild(h("div", { class: "counter", text: "Question " + (qi + 1) + " sur " + D.quiz.length }));
@@ -545,10 +599,11 @@ function stepQuiz(main) {
         if (o.ok) {
           solved = true; b.classList.add("right");
           if (tries === 1) { firstTry++; addStar(); }
+          noteQuiz(true);
           fb.appendChild(h("div", { class: "feedback good", text: tries === 1 ? "Bravo ! ⭐" : "Bravo, tu as trouvé ! 👏" }));
           setNext(qi < D.quiz.length - 1 ? "Question suivante ➜" : "Voir mon résultat ➜", function () { qi++; setNext(null); show(); });
         } else {
-          b.classList.add("tried");
+          b.classList.add("tried"); faux.push(plain(txt(o.e))); noteQuiz(false);
           var hb = BLOCS[q.indice.bloc];
           fb.appendChild(h("div", { class: "feedback again", text: "Pas tout à fait… Relis ce passage de ta leçon et essaie encore ! 💪" }));
           fb.appendChild(h("div", { class: "hintbox" }, h("div", { class: "label", text: "💡 Indice" }),
@@ -565,7 +620,7 @@ function stepQuiz(main) {
 
 /* ------------------------------------------------------------ 4. récitation */
 function stepRecitation(main) {
-  var b = BLOCS[D.recitation.bloc], level = 0, MAX = 4;
+  var b = BLOCS[D.recitation.bloc], level = 0, MAX = 4, maxNiv = 0;
   if (!b.strophes) { setNext(null); main.appendChild(h("section", { class: "card poeme" }, h("div", { class: "terme", text: b.titre }), saisiePoeme(b))); return; }
   var units = D.recitation.unite === "strophe" ? b.strophes.map(function (st) { return [st]; }) : b.strophes.map(function (st) { return st.map(function (v) { return [v]; }); });
   setNext(null);
@@ -607,9 +662,10 @@ function stepRecitation(main) {
     zone.appendChild(card);
     zone.appendChild(h("div", { class: "actions" },
       level > 0 ? h("button", { class: "btn", type: "button", text: "👀 Montrer plus de mots", onclick: function () { level--; show(); } }) : null,
-      level < MAX ? h("button", { class: "btn primary", type: "button", id: "btn-cacher", text: "🙈 Cacher plus de mots", onclick: function () { level++; if (level === MAX) addStar(); show(); } }) : null,
+      level < MAX ? h("button", { class: "btn primary", type: "button", id: "btn-cacher", text: "🙈 Cacher plus de mots", onclick: function () { level++; if (level === MAX) addStar();
+        if (level > maxNiv) { maxNiv = level; journal.ev({ k: "recitation", niveau: level, max: MAX }); } show(); } }) : null,
       h("button", { class: "btn", type: "button", text: "🔊 Tout écouter", onclick: function (ev) { TTS.speak(blocOral(b), ev.currentTarget); } })));
-    if (level === MAX) setNext(nextLabel(), goNext); else setNext(null);
+    if (level === MAX) { journal.etape("finies", "recitation"); setNext(nextLabel(), goNext); } else setNext(null);
   }
   show();
 }
@@ -622,9 +678,14 @@ function stepOral(main) {
     main.querySelectorAll(".ozone").forEach(function (n) { n.remove(); });
     var zone = h("div", { class: "ozone" }); main.appendChild(zone);
     setProgress(oi / D.oral.length);
-    if (oi >= D.oral.length) { setProgress(1); setNext(nextLabel(), goNext); zone.appendChild(h("div", { class: "card end" },
+    if (oi >= D.oral.length) { journal.etape("finies", "oral"); setProgress(1); setNext(nextLabel(), goNext); zone.appendChild(h("div", { class: "card end" },
       h("div", { class: "big", text: "🗣️" }), h("p", { text: valid + " réponse" + (valid > 1 ? "s" : "") + " validée" + (valid > 1 ? "s" : "") + " avec ton parent !" }))); return; }
     var o = D.oral[oi], qsay = sayBtn(function () { return segOf(o.question); });
+    function noteOral(ok) {
+      var coches = [], manque = [];
+      reveal.querySelectorAll(".check").forEach(function (c, i) { (c.getAttribute("aria-pressed") === "true" ? coches : manque).push(plain(o.points_cles[i])); });
+      journal.ev({ k: "oral", id: o.id, q: plain(txt(o.question)), valide: ok, coches: coches, manque: manque });
+    }
     zone.appendChild(h("div", { class: "counter", text: "Question " + (oi + 1) + " sur " + D.oral.length }));
     zone.appendChild(h("div", { class: "card has-say" }, h("div", { class: "label", text: "La question de la maîtresse ou du maître" }),
       h("div", { class: "q" }, rich(txt(o.question))), itemImg(o), qsay));
@@ -640,8 +701,8 @@ function stepOral(main) {
       var refs = h("details", { class: "card" }, h("summary", { text: "Voir la leçon" }), o.ref.map(function (r) { return BLOCS[r] ? renderBloc(BLOCS[r], { noSay: true }) : null; }));
       reveal.appendChild(refs);
       reveal.appendChild(h("div", { class: "actions" },
-        h("button", { class: "btn soft", type: "button", text: "🔁 On revoit ensemble", onclick: function () { oi++; show(); } }),
-        h("button", { class: "btn ok", type: "button", id: "btn-valide", text: "👍 C'est validé !", onclick: function () { valid++; addStar(); oi++; show(); } })));
+        h("button", { class: "btn soft", type: "button", id: "btn-revoir-oral", text: "🔁 On revoit ensemble", onclick: function () { noteOral(false); oi++; show(); } }),
+        h("button", { class: "btn ok", type: "button", id: "btn-valide", text: "👍 C'est validé !", onclick: function () { noteOral(true); valid++; addStar(); oi++; show(); } })));
     } });
     zone.appendChild(h("div", { class: "actions" }, vb)); zone.appendChild(reveal);
     if (TTS.auto) TTS.speak(segOf(o.question), qsay);
@@ -655,10 +716,11 @@ function renderEnd() {
   var main = shell(); setProgress(1); setNext(null);
   var nom = reglagesProfil().prenom ? " " + reglagesProfil().prenom : "";
   var pr = store.get(); store.patch({ fini: true, best: Math.max(pr.best || 0, state.stars) });
+  journal.marque({ terminee: true, etoiles: state.stars });
   main.appendChild(h("div", { class: "card end", id: "fin" }, h("div", { class: "big", text: "🏆" }),
     h("h2", { text: "Bravo" + nom + " !" }), h("p", { text: "Tu as gagné " + state.stars + " étoile" + (state.stars > 1 ? "s" : "") + " ⭐" }),
     h("div", { class: "actions" },
-      h("button", { class: "btn", type: "button", text: "🔁 Recommencer", onclick: function () { state = { step: 0, done: {}, stars: 0 }; render(); } }),
+      h("button", { class: "btn", type: "button", text: "🔁 Recommencer", onclick: function () { state = { step: 0, done: {}, stars: 0 }; journal.debut(D); render(); } }),
       h("button", { class: "btn primary", type: "button", id: "btn-retour", text: "🏠 Mes leçons", onclick: function () { renderHome(); } }))));
   if (TTS.auto) TTS.speak([{ text: "Bravo" + nom + " ! Tu as gagné " + state.stars + " étoiles.", lang: "fr-FR" }]);
 }
@@ -676,11 +738,16 @@ function stepCalculs(main) {
     var zone = h("div", { class: "czone" }); main.appendChild(zone);
     setProgress(ci / CAL.length);
     if (ci >= CAL.length) {
+      journal.etape("finies", "calculs");
       zone.appendChild(h("div", { class: "card end" }, h("div", { class: "big", text: "🧮" }),
         h("p", { text: first + " calcul" + (first > 1 ? "s" : "") + " réussi" + (first > 1 ? "s" : "") + " du premier coup sur " + CAL.length + " !" })));
       setProgress(1); setNext(nextLabel(), goNext); return;
     }
-    var c = CAL[ci], val = "", tries = 0, done = false;
+    var c = CAL[ci], val = "", tries = 0, done = false, saisies = [], evt = null;
+    function note(ok, fini) {
+      var o = { saisies: saisies.slice(), reussi: ok, fini: fini };
+      if (evt) journal.maj(evt, o); else { o.k = "calcul"; o.id = c.id; o.gen = c.genere || null; o.consigne = plain(txt(c.consigne)); o.attendu = String(c.reponse); evt = journal.ev(o); }
+    }
     var csay = sayBtn(function () { return segOf(c.consigne); });
     var gauche = h("div", { class: "cgauche" }), droite = h("div", { class: "cdroite" });
     zone.appendChild(gauche); zone.appendChild(droite);
@@ -702,19 +769,19 @@ function stepCalculs(main) {
     }));
     var ok = h("button", { class: "btn primary", type: "button", id: "btn-valider", text: "✓ Valider", onclick: function () {
       if (done || !val) return;
-      tries++; fb.innerHTML = "";
+      tries++; fb.innerHTML = ""; saisies.push(val);
       if (norm(val) === norm(c.reponse)) {
-        done = true; disp.classList.add("juste");
+        done = true; disp.classList.add("juste"); note(true, true);
         if (tries === 1) { first++; addStar(); }
         fb.appendChild(h("div", { class: "feedback good", text: tries === 1 ? "Bravo ! ⭐" : "Bravo, tu as trouvé ! 👏" }));
         setNext(ci < CAL.length - 1 ? "Calcul suivant ➜" : "Voir mon résultat ➜", function () { ci++; setNext(null); show(); });
       } else if (tries < 3) {
-        val = ""; upd();
+        note(false, false); val = ""; upd();
         var hb = BLOCS[c.ref[0]];
         fb.appendChild(h("div", { class: "feedback again", text: "Pas encore… Regarde ta leçon et essaie encore ! 💪" }));
         if (hb) fb.appendChild(h("div", { class: "hintbox" }, h("div", { class: "label", text: "💡 Indice" }), renderBloc(hb)));
       } else {
-        done = true;
+        done = true; note(false, true);
         fb.appendChild(h("div", { class: "feedback again", text: "La bonne réponse était " + c.reponse + ". On le retravaillera ensemble ! 🌱" }));
         setNext(ci < CAL.length - 1 ? "Calcul suivant ➜" : "Voir mon résultat ➜", function () { ci++; setNext(null); show(); });
       }
@@ -760,6 +827,7 @@ function openLesson(lesson) {
   });
   store.patch({ ouvert: true });
   state = { step: 0, done: {}, stars: 0 };
+  journal.debut(D);
   render();
 }
 
@@ -869,7 +937,7 @@ function carteLecon(l) {
 }
 
 function renderHome(info) {
-  TTS.stop(); setNext(null); D = null; app.innerHTML = ""; window.scrollTo(0, 0);
+  TTS.stop(); setNext(null); D = null; journal.fin(); app.innerHTML = ""; window.scrollTo(0, 0);
   var vues = { revoir: ["🌙", "À revoir", aRevoir], nouveau: ["✨", "Nouvelles leçons", estNouvelle] };
   var liste = null, titre = null;
   if (VUE && vues[VUE]) { liste = LESSONS.filter(vues[VUE][2]); titre = vues[VUE][0] + " " + vues[VUE][1]; }
@@ -917,6 +985,169 @@ function renderHome(info) {
   });
   if (info && info.illisibles) app.appendChild(h("p", { class: "parentnote", text: info.illisibles + " leçon(s) illisible(s) : le mot de passe a peut-être changé (zone parent > Verrouiller)." }));
   app.appendChild(piedParent());
+}
+
+/* ------------------------------------------------------------ bilan des révisions (export) */
+var BILAN = { profil: "enfant", periode: "envoi" };
+var PERIODES = [["envoi", "Depuis le dernier envoi"], ["7", "7 jours"], ["30", "30 jours"], ["tout", "Tout"]];
+var DUREE_MAX = 30; /* minutes : une appli restée ouverte ne gonfle pas le total */
+function d2(n) { return (n < 10 ? "0" : "") + n; }
+function jjmm(iso) { var d = new Date(iso); return d2(d.getDate()) + "/" + d2(d.getMonth() + 1); }
+function jjmmhh(iso) { var d = new Date(iso); return jjmm(iso) + " " + d2(d.getHours()) + ":" + d2(d.getMinutes()); }
+function guil(s) { return "« " + s + " »"; }
+function depuisPeriode(pid, per) {
+  if (per === "tout") return "";
+  if (per === "envoi") return reglagesDe(pid).dernier_envoi || "";
+  return new Date(Date.now() - parseInt(per, 10) * 864e5).toISOString();
+}
+/* résumé lisible par le parent et par Claude, puis données brutes */
+function genererBilan(all, pid, depuis) {
+  var pr = profils.get(pid), maintenant = new Date().toISOString();
+  var S = all.filter(function (x) { return x.profil === pid && x.debut >= depuis; }).sort(function (a, b) { return a.debut < b.debut ? -1 : 1; });
+  var L = [], du = S.length ? S[0].debut : depuis || maintenant;
+  L.push("Bilan du cahier de révisions : du " + jjmm(du) + " au " + jjmm(maintenant) + " (profil " + pr.libelle + ")");
+  if (!S.length) { L.push("", "Aucune séance sur cette période."); var t0 = L.join("\n"); return { texte: t0, court: t0, n: 0 }; }
+  var minutes = 0, plafond = false, lecons = {}, ordre = [];
+  S.forEach(function (x) {
+    var m = (new Date(x.fin) - new Date(x.debut)) / 6e4;
+    if (m > DUREE_MAX) { m = DUREE_MAX; plafond = true; }
+    minutes += m;
+    if (!lecons[x.lecon]) { lecons[x.lecon] = { titre: x.titre, seances: [] }; ordre.push(x.lecon); }
+    lecons[x.lecon].seances.push(x);
+  });
+  L.push(S.length + " séance" + (S.length > 1 ? "s" : "") + ", " + Math.round(minutes) + " minute" + (Math.round(minutes) > 1 ? "s" : "") +
+    " au total" + (plafond ? " (séances longues comptées 30 min)" : "") + ", " + ordre.length + " leçon" + (ordre.length > 1 ? "s" : "") + " travaillée" + (ordre.length > 1 ? "s" : "") + ".");
+  L.push("Les identifiants entre crochets sont les meta.id des leçons.");
+
+  var sautees = S.filter(function (x) { return x.etapes.sautees.some(function (e) { return x.etapes.finies.indexOf(e) < 0; }); });
+  L.push("", "ÉTAPES SAUTÉES : " + sautees.length + " séance" + (sautees.length > 1 ? "s" : "") + " sur " + S.length);
+  sautees.forEach(function (x) {
+    L.push("- " + jjmm(x.debut) + " " + guil(x.titre) + " : " + x.etapes.sautees.filter(function (e) { return x.etapes.finies.indexOf(e) < 0; })
+      .map(function (e) { return (STEP_META[e] || { label: e }).label.toLowerCase(); }).join(", "));
+  });
+
+  var aRetravailler = [], acquis = [];
+  ordre.forEach(function (id) {
+    var lc = lecons[id], ev = [];
+    lc.seances.forEach(function (x) { ev = ev.concat(x.ev); });
+    var pb = [], ok = [];
+    /* quiz : par question, le nombre de fois où elle a demandé plusieurs essais */
+    var qz = {}, qn = [];
+    ev.filter(function (e) { return e.k === "quiz"; }).forEach(function (e) {
+      if (!qz[e.id]) { qz[e.id] = { q: e.q, fois: 0, vues: 0, faux: [] }; qn.push(e.id); }
+      var z = qz[e.id]; z.vues++;
+      if (e.essais > 1 || e.resolu === false) { z.fois++; e.faux.forEach(function (f) { if (z.faux.indexOf(f) < 0) z.faux.push(f); }); }
+      if (e.resolu === false) z.abandon = (z.abandon || 0) + 1;
+    });
+    var qok = 0;
+    qn.forEach(function (k) { var z = qz[k];
+      if (z.fois) pb.push("quiz " + k + " " + guil(z.q) + " : raté du premier coup " + z.fois + " fois sur " + z.vues + " (choisi : " + z.faux.map(guil).join(", ") + ")" +
+        (z.abandon ? ", question quittée sans la bonne réponse" + (z.abandon > 1 ? " " + z.abandon + " fois" : "") : ""));
+      else qok++; });
+    if (qn.length) ok.push("quiz " + qok + "/" + qn.length + " du premier coup");
+    /* calculs : chaque calcul manqué au premier essai (les nombres changent d'une séance à l'autre) */
+    var cal = ev.filter(function (e) { return e.k === "calcul"; }), cok = cal.filter(function (e) { return e.reussi && e.saisies.length === 1; }).length;
+    cal.filter(function (e) { return !(e.reussi && e.saisies.length === 1); }).slice(0, 8).forEach(function (e) {
+      pb.push("calcul " + (e.gen ? "(" + e.gen + ") " : e.id + " ") + guil(e.consigne) + " : attendu " + e.attendu + ", saisi " + e.saisies.join(" puis ") +
+        (e.reussi ? "" : e.fini === false ? " (calcul quitté en cours)" : " (non trouvé)"));
+    });
+    if (cal.length) ok.push("calculs " + cok + "/" + cal.length + " du premier coup");
+    /* cartes : état à la dernière séance où elles ont été passées */
+    var dernier = {}; ev.filter(function (e) { return e.k === "carte"; }).forEach(function (e) { dernier[e.id] = e; });
+    var cartes = Object.keys(dernier).map(function (k) { return dernier[k]; });
+    var demain = cartes.filter(function (e) { return e.demain; }), hesite = cartes.filter(function (e) { return !e.demain && e.revoir > 0; });
+    if (demain.length) pb.push("cartes à revoir demain : " + demain.map(function (e) { return e.id + " " + guil(e.recto); }).join(", "));
+    if (hesite.length) pb.push("cartes sues après hésitation : " + hesite.map(function (e) { return e.id + " " + guil(e.recto); }).join(", "));
+    if (cartes.length) ok.push("cartes " + cartes.filter(function (e) { return !e.demain && !e.revoir; }).length + "/" + cartes.length + " sues tout de suite");
+    /* récitation : niveau de masquage le plus haut atteint */
+    var rec = ev.filter(function (e) { return e.k === "recitation"; });
+    if (rec.length) { var mx = Math.max.apply(null, rec.map(function (e) { return e.niveau; })), MX = rec[0].max;
+      if (mx < MX) pb.push("récitation : niveau " + mx + " sur " + MX + " atteint"); else ok.push("récitation complète"); }
+    /* oral : dernière réponse de chaque question */
+    var od = {}; ev.filter(function (e) { return e.k === "oral"; }).forEach(function (e) { od[e.id] = e; });
+    Object.keys(od).forEach(function (k) { var e = od[k];
+      if (e.valide) ok.push("oral " + k + " validé"); else pb.push("oral " + k + " " + guil(e.q) + " : à revoir" + (e.manque.length ? " (manquait : " + e.manque.join(" ; ") + ")" : "")); });
+    var tete = guil(lc.titre) + " [" + id + "]";
+    if (pb.length) aRetravailler.push({ tete: tete, pb: pb });
+    else if (ok.length) acquis.push(tete + " : " + ok.join(", "));
+  });
+  L.push("", "À RETRAVAILLER");
+  if (!aRetravailler.length) L.push("- rien à signaler");
+  aRetravailler.forEach(function (x) { L.push("- " + x.tete); x.pb.forEach(function (p) { L.push("    · " + p); }); });
+  L.push("", "ACQUIS");
+  if (!acquis.length) L.push("- aucune leçon sans erreur sur cette période");
+  acquis.forEach(function (a) { L.push("- " + a); });
+  var court = L.join("\n");
+
+  L.push("", "DÉTAIL PAR SÉANCE");
+  S.forEach(function (x) {
+    var m = Math.min(DUREE_MAX, Math.round((new Date(x.fin) - new Date(x.debut)) / 6e4));
+    L.push("- " + jjmmhh(x.debut) + ", " + m + " min, " + guil(x.titre) + " : étapes finies " + (x.etapes.finies.join(", ") || "aucune") +
+      (x.terminee ? " ; leçon terminée" : " ; leçon non terminée"));
+  });
+  L.push("", "--- DONNÉES BRUTES (JSON) ---",
+    JSON.stringify({ format: "bilan-cahier-1", version: VERSION, profil: pid, depuis: depuis || null, genere: maintenant, seances: S }),
+    "--- FIN ---");
+  return { texte: L.join("\n"), court: court, n: S.length };
+}
+
+function carteBilan(out) {
+  var card = h("div", { class: "card", id: "bilan" }, h("div", { class: "label", text: "Bilan des révisions" }));
+  var info = h("p", { id: "bilan-info", text: "Calcul du bilan…" });
+  var pre = h("pre", { class: "bilan-texte", id: "bilan-texte" });
+  var r = reglages();
+  var email = h("input", { type: "email", class: "mdp", id: "email", value: r.email || "", placeholder: "adresse email (bouton Email)", "aria-label": "Adresse email du parent" });
+  email.addEventListener("change", function () { setReglages({ email: email.value.trim() }); });
+  var B = null;
+  function nomFichier() { var d = new Date(); return "bilan-" + d.getFullYear() + "-" + d2(d.getMonth() + 1) + "-" + d2(d.getDate()) + ".txt"; }
+  function marquer() { setReglagesDe(BILAN.profil, { dernier_envoi: new Date().toISOString() }); }
+  function corpsCourt() { return B.court.length > 1500 ? B.court.slice(0, 1500) + "\n… (suite dans le fichier du bilan)" : B.court; }
+  card.appendChild(h("div", { class: "actions" }, PROFILS.map(function (x) {
+    var on = x.id === BILAN.profil;
+    return h("button", { class: "btn" + (on ? " primary" : ""), type: "button", "data-bilan-profil": x.id, "aria-pressed": on ? "true" : "false",
+      text: x.icon + " " + x.libelle, onclick: function () { BILAN.profil = x.id; renderParent(); } });
+  })));
+  card.appendChild(h("div", { class: "actions" }, PERIODES.map(function (x) {
+    var on = x[0] === BILAN.periode;
+    return h("button", { class: "btn" + (on ? " primary" : ""), type: "button", "data-periode": x[0], "aria-pressed": on ? "true" : "false",
+      text: x[1], onclick: function () { BILAN.periode = x[0]; renderParent(); } });
+  })));
+  card.appendChild(info);
+  card.appendChild(h("details", null, h("summary", { text: "Voir le bilan" }), pre));
+  card.appendChild(email);
+  var bShare = h("button", { class: "btn primary", type: "button", id: "btn-partager", text: "📤 Envoyer le bilan", disabled: true });
+  var bMail = h("button", { class: "btn", type: "button", id: "btn-email", text: "✉️ Email (résumé)", disabled: true });
+  var bDl = h("button", { class: "btn", type: "button", id: "btn-telecharger", text: "⬇️ Télécharger", disabled: true });
+  card.appendChild(h("div", { class: "actions" }, bShare, bMail, bDl));
+  bShare.addEventListener("click", function () {
+    var f = new File([B.texte], nomFichier(), { type: "text/plain" });
+    if (!(navigator.canShare && navigator.share && navigator.canShare({ files: [f] }))) {
+      out.textContent = "Partage de fichier indisponible sur ce navigateur : utilisez Email ou Télécharger."; return;
+    }
+    navigator.share({ files: [f], title: "Bilan du cahier de révisions", text: corpsCourt() })
+      .then(function () { marquer(); renderParent("Bilan envoyé."); })
+      .catch(function (e) { if (e && e.name !== "AbortError") out.textContent = "Envoi impossible : " + e.message; });
+  });
+  bMail.addEventListener("click", function () {
+    setReglages({ email: email.value.trim() });
+    marquer();
+    location.href = "mailto:" + encodeURIComponent(email.value.trim()) + "?subject=" + encodeURIComponent("Bilan du cahier de révisions") + "&body=" + encodeURIComponent(corpsCourt());
+  });
+  bDl.addEventListener("click", function () {
+    var url = URL.createObjectURL(new Blob([B.texte], { type: "text/plain;charset=utf-8" }));
+    var a = h("a", { href: url, download: nomFichier() }); document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function () { URL.revokeObjectURL(url); }, 4000);
+    marquer(); out.textContent = "Bilan téléchargé (" + nomFichier() + ").";
+  });
+  var depuis = depuisPeriode(BILAN.profil, BILAN.periode), envoi = reglagesDe(BILAN.profil).dernier_envoi;
+  journal.lire().then(function (all) {
+    B = genererBilan(all, BILAN.profil, depuis);
+    window.__bilan = B.texte;
+    info.textContent = B.n + " séance" + (B.n > 1 ? "s" : "") + " sur la période · dernier envoi : " + (envoi ? jjmmhh(envoi) : "jamais");
+    pre.textContent = B.texte.split("\n--- DONNÉES BRUTES")[0];
+    bShare.disabled = bMail.disabled = bDl.disabled = !B.n;
+  });
+  return card;
 }
 
 /* zone parent : leçons par thème du programme, thèmes encore vides compris */
@@ -967,6 +1198,7 @@ function renderParent(msg) {
         text: x.icon + " " + x.libelle, onclick: function () { profils.choisir(x.id); renderParent("Profil actif : " + x.libelle + "."); } });
     })),
     h("p", { class: "parentnote", text: "Le profil test garde sa propre progression. L'appli revient au profil Enfant à chaque lancement." })));
+  app.appendChild(carteBilan(out));
   var taille = reglages().taille || "moyenne";
   app.appendChild(h("div", { class: "card" }, h("div", { class: "label", text: "Taille du texte" }),
     h("div", { class: "actions" }, ["petite", "moyenne", "grande"].map(function (k) {
@@ -1022,5 +1254,6 @@ appliquerTaille();
 migrerProfils();
 profils.choisir("enfant"); /* chaque lancement repart sur le profil de l'enfant */
 protegerStockage();
+journal.purger();
 boot();
 })();
