@@ -136,8 +136,8 @@ def valeur_schema(sc):
     f, q = sc["f"], (lambda x: x == "?")
     try:
         if f == "tout":
-            a, b = sc["parts"]
-            return Fraction(a + b) if q(sc["top"]) else Fraction(sc["top"] - (b if q(a) else a))
+            conn = sum(x for x in sc["parts"] if not q(x))
+            return Fraction(conn) if q(sc["top"]) else Fraction(sc["top"] - conn)
         if f == "cmp":
             if q(sc["grand"]):
                 return Fraction(sc["petit"] + sc["ecart"])
@@ -167,26 +167,75 @@ def connus(sc):
         v = [sc["petit"], sc["grand"]]
     return [x for x in v if x != "?"]
 
-OP = {"s1_parties": "+", "s1_egales": "×", "s2_complement": "−", "s2_perte": "−", "s2_avant_ajout": "−", "s3_part": "÷",
+OP = {"s1_parties": "+", "s1_trois": "+", "s1_perimetre": "×", "s1_egales": "×", "s2_complement": "−", "s2_perte": "−", "s2_avant_ajout": "−", "s3_part": "÷",
       "s3_nombre": "÷", "s4_grande": "+", "s4_petite": "−", "s4_ecart": "−", "s5_fois_plus": "×", "s5_fois_moins": "÷"}
+E2_CAS = ["e2_gagne_donne", "e2_depenses", "e2_groupes_fois", "e2_groupes_plus", "e2_total_partage"]
+def fmt(n):
+    return f"{n:,}".replace(",", " ")
 NP = 1000
 for limite in (999, 9999):
     JSP = f"""
 require({json.dumps(str(ROOT / "generateurs.js"))});
 const G = globalThis.GENERATEURS, out = [];
-for (const c of G.G.probleme.cas) for (let i = 0; i < {NP}; i++) out.push(Object.assign(G.G.probleme({{problemes: [c], limite: {limite}}}), {{c}}));
+const PERSO = {{enfant: ["Inès", "f"], amis: [["Anna", "f"], ["Elio", "m"], ["Iris", "f"]], maitresse: "Madame Olive", doudou: ["Doudou Ours", "m"], parents: [["Papa", "m"], ["Maman", "f"]]}};
+for (const perso of [null, PERSO]) {{
+  G.G.perso = perso;
+  for (const c of G.G.probleme.cas) for (let i = 0; i < {NP}; i++) out.push(Object.assign(G.G.probleme({{problemes: [c], limite: {limite}}}), {{c, perso: !!perso}}));
+}}
+G.G.perso = null;
+out.push(...G.creer([{{id: "g2", type: "probleme", nombre: 6, ref: ["b1"], params: {{}}}}]).map(x => Object.assign(x, {{c: "defaut"}})));
 out.push(...G.creer([{{id: "g1", type: "probleme", nombre: 6, ref: ["b1"], params: {{strategies: [4]}}}}]).map(x => Object.assign(x, {{c: "seance"}})));
 process.stdout.write(JSON.stringify({{cas: G.G.probleme.cas, out}}));
 """
     res = json.loads(subprocess.run(["node", "-e", JSP], capture_output=True, text=True, check=True).stdout)
-    if sorted(res["cas"]) != sorted(OP):
+    if sorted(res["cas"]) != sorted(list(OP) + E2_CAS):
         ko(f"problèmes : cas {res['cas']}")
     vus = {}
+    noms_perso = 0
     for it in res["out"]:
         P, t = it["probleme"], it["consigne"]["texte"]
         if it["c"] == "seance":
             if not P["cas"].startswith("s4_"):
                 ko(f"problèmes : stratégie 4 demandée, cas {P['cas']}")
+            continue
+        if it["c"] == "defaut":
+            if P["cas"].startswith("e2_"):
+                ko(f"problèmes : sans « strategies », pas de problème à deux étapes ({P['cas']})")
+            continue
+        texte_complet = " ".join([x for x in [t, P["phrase"], P.get("blague")] + [e["question"] for e in P.get("etapes") or []] if x])
+        if it["perso"] and re.search(r"Inès|Anna|Elio|Iris|Madame Olive|Doudou Ours", texte_complet):
+            noms_perso += 1
+        if not it["perso"] and re.search(r"Inès|Anna|Elio|Madame Olive|Doudou Ours", texte_complet):
+            ko(f"problème {P['cas']} : personnalisation présente sans perso « {t} »")
+        if re.search(r"\b(de|que) [AEIOUYÉÈ]", texte_complet):
+            ko(f"problème {P['cas']} : élision manquante « {texte_complet} »")
+        if P["cas"].startswith("e2_"):
+            vus.setdefault(P["cas"], set()).add(t.split(" ")[0] + "…" + str(len(t)))
+            E2 = P["etapes"]
+            rep2 = int(it["reponse"])
+            r1 = eval_expr(E2[0]["calcul"])
+            if len(E2) != 2 or r1 != int(E2[0]["reponse"]) or eval_expr(E2[1]["calcul"]) != rep2 or int(E2[1]["reponse"]) != rep2:
+                ko(f"problème {P['cas']} : étapes {E2} ≠ {rep2}")
+            if fmt(int(E2[0]["reponse"])) not in E2[1]["calcul"].replace("\u00a0", " "):
+                ko(f"problème {P['cas']} : l'étape 2 ne reprend pas le résultat de l'étape 1 ({E2})")
+            for e in E2:
+                if re.search(r" ([+−×÷]) ", e["calcul"])[1] != e["op"] or not e["question"].endswith("?") or not e["aideOp"]:
+                    ko(f"problème {P['cas']} : étape {e}")
+            if r1 < 1 or rep2 < 1 or r1 != int(r1) or max(r1, rep2) > limite:
+                ko(f"problème {P['cas']} : résultat {r1} / {rep2} hors bornes")
+            nombres = [int(x.replace(" ", "")) for x in re.findall(r"\d{1,3}(?: \d{3})+|\d+", t)]
+            if max(nombres) > limite:
+                ko(f"problème {P['cas']} : nombre > {limite} : « {t} »")
+            if E2[1]["op"] == "÷" and int(E2[0]["reponse"]) % int(E2[1]["calcul"].split(" ÷ ")[1]):
+                ko(f"problème {P['cas']} : division non exacte")
+            if not t.endswith("?") or fmt(rep2) not in P["phrase"].replace("\u00a0", " ") or P["unite"] not in P["phrase"] + " " + t:
+                ko(f"problème {P['cas']} : énoncé ou phrase « {t} » / « {P['phrase']} »")
+            for mauvais in ("undefined", "NaN", "null", "  "):
+                if mauvais in texte_complet:
+                    ko(f"problème {P['cas']} : « {mauvais} » dans « {texte_complet} »")
+            if re.search(r" \?|\d (€|kg|cm|dm|m|g|L)\b", texte_complet) or re.search(r"€|\d (kg|cm|dm|m|g|L)\b", it["consigne"]["oral"]):
+                ko(f"problème {P['cas']} : espace ou unité « {t} »")
+            counts["probleme"] = counts.get("probleme", 0) + 1
             continue
         vus.setdefault(P["cas"], set()).add(t.split(" ")[0] + "…" + str(len(t)))
         rep = int(it["reponse"])
@@ -214,29 +263,35 @@ process.stdout.write(JSON.stringify({{cas: G.G.probleme.cas, out}}));
         for x in connus(bons[0]["spec"]):
             if P["cas"] in ("s5_fois_plus", "s5_fois_moins"):
                 break
+            if P["cas"] == "s1_perimetre" and x == 4:  # « carré » : les 4 côtés ne sont pas écrits
+                continue
             if x not in nombres:
                 ko(f"problème {P['cas']} : {x} du schéma absent de l'énoncé « {t} »")
         if max(nombres + [rep]) > limite:
             ko(f"problème {P['cas']} : nombre > {limite} : « {t} »")
         # rédaction
-        for mauvais in ("undefined", "NaN", "null", "  ", " de A", " de E", " de I", " de O", " de U", "que A", "que E", "que I", "que O", "que U"):
+        for mauvais in ("undefined", "NaN", "null", "  "):
             if mauvais in t or mauvais in P["phrase"]:
                 ko(f"problème {P['cas']} : « {mauvais} » dans « {t} » / « {P['phrase']} »")
+        if re.search(r"\b(de|que) ([AEIOU]|elle\b|il\b)", t + " " + P["phrase"]):
+            ko(f"problème {P['cas']} : élision manquante « {t} » / « {P['phrase']} »")
         if not t.endswith("?") or len([m for m in re.split(r"[.?!]", t) if m.strip()]) > 4:
             ko(f"problème {P['cas']} : énoncé « {t} »")
         if any(len(ph.split()) > 22 for ph in re.split(r"(?<=[.?!])\s", t)):
             ko(f"problème {P['cas']} : phrase trop longue « {t} »")
-        if re.search(r" \?|\d (€|kg|cm|m|L)\b", t + " " + P["phrase"]):
+        if re.search(r" \?|\d (€|kg|cm|dm|m|g|L)\b", t + " " + P["phrase"]):
             ko(f"problème {P['cas']} : espace sécable avant « ? » ou une unité : « {t} »")
         rf = f"{rep:,}".replace(",", " ")
         if rf not in P["phrase"].replace("\u00a0", " ") or P["unite"] not in P["phrase"] + " " + t:
             ko(f"problème {P['cas']} : phrase réponse « {P['phrase']} » ({rep} {P['unite']})")
-        if "€" in it["consigne"]["oral"] or re.search(r"\d (kg|cm|m|L)\b", it["consigne"]["oral"]):
+        if "€" in it["consigne"]["oral"] or re.search(r"\d (kg|cm|dm|m|g|L)\b", it["consigne"]["oral"]):
             ko(f"problème {P['cas']} : unité non lue « {it['consigne']['oral']} »")
         counts["probleme"] = counts.get("probleme", 0) + 1
-    for c in OP:
+    for c in list(OP) + E2_CAS:
         if len(vus.get(c, ())) < 4:
             ko(f"problème {c} : contextes peu variés ({len(vus.get(c, ()))})")
+    if noms_perso < NP * len(res["cas"]) * 0.5:
+        ko(f"problèmes : la personnalisation est peu utilisée ({noms_perso} énoncés)")
 
 print(f"{len(items)} exercices tirés : " + ", ".join(f"{k} {v}" for k, v in sorted(counts.items())))
 print("RÉSULTAT :", "PASS" if not fails else f"FAIL ({len(fails)})")

@@ -230,7 +230,30 @@ G.decomposer_produit = function () {
 /* prénoms sans voyelle initiale : jamais d'élision à gérer (« de Hugo » s'écrit bien ainsi, h aspiré) */
 var PRENOMS = [["Lou", "f"], ["Hugo", "m"], ["Jade", "f"], ["Noé", "m"], ["Chloé", "f"], ["Malik", "m"], ["Zoé", "f"],
                ["Sacha", "m"], ["Mia", "f"], ["Yanis", "m"], ["Rose", "f"], ["Tom", "m"], ["Nina", "f"], ["Théo", "m"]];
-function deuxPrenoms() { var a = pick(PRENOMS), b; do { b = pick(PRENOMS); } while (b === a); return [a, b]; }
+/* Personnalisation (lecons/perso.json, chiffré ; posée par l'appli dans G.perso) : prénom de l'enfant, copains, maîtresse,
+   doudou, parents. Sans elle, les énoncés gardent des prénoms et des personnages génériques. */
+function persoListe() {
+  var P = G.perso || {}, l = (P.amis || []).filter(function (x) { return x && x[0]; });
+  if (P.enfant && P.enfant[0]) l = l.concat([P.enfant, P.enfant]); /* l'enfant revient plus souvent que chaque copain */
+  return l;
+}
+function deuxPrenoms() {
+  var pool = persoListe();
+  if (pool.length < 2 || Math.random() < 0.15) pool = PRENOMS;
+  var a = pick(pool), b, k = 0;
+  do { b = pick(pool); } while (b[0] === a[0] && ++k < 50);
+  if (b[0] === a[0]) b = pick(PRENOMS.filter(function (x) { return x[0] !== a[0]; }));
+  return [a, b];
+}
+function cap(t) { return t.charAt(0).toUpperCase() + t.slice(1); }
+/* la maîtresse, le doudou, un parent : [nom, genre] */
+function maitresse() { var m = (G.perso || {}).maitresse; return m ? [m, "f"] : ["la maîtresse", "f"]; }
+function doudou() { var d = (G.perso || {}).doudou; return d && d[0] ? d : ["Pilou le phoque", "m"]; }
+function unParent() { var l = (G.perso || {}).parents; return pick(l && l.length ? l : [["Papa", "m"], ["Maman", "f"]]); }
+function ils(a, b) { return genre(a) === "f" && genre(b) === "f" ? "elles" : "ils"; }
+function chacun(a, b) { return genre(a) === "f" && genre(b) === "f" ? "chacune" : "chacun"; }
+/* élision devant un prénom à voyelle (« d'Inès », « qu'Anna ») : les prénoms personnels ne sont pas choisis pour l'éviter */
+function elisions(t) { return t.replace(/\b(que|Que) (elle|il|elles|ils|on|un|une)\b/g, "$1'$2").replace(/\b(que|Que)'/g, function (m, w) { return w === "Que" ? "Qu'" : "qu'"; }).replace(/\b(de|que|De|Que) ([AEIOUYÉÈÊÂÎÔ])/g, function (m, w, v) { return (w.toLowerCase() === "de" ? (w === "De" ? "D'" : "d'") : (w === "Que" ? "Qu'" : "qu'")) + v; }); }
 /* P : { 0: prénom 1, g: genre 1, 1: [prénom 2, genre 2] } ; il(P) parle du 1er, il(P[1]) du 2e */
 function genre(x) { return x.g || x[1]; }
 function il(x) { return genre(x) === "f" ? "elle" : "il"; }
@@ -242,7 +265,10 @@ function fois(k) { return enLettres(k) + " fois"; }
 function valeurSchema(s) {
   function q(x) { return x === "?"; }
   var v = null;
-  if (s.f === "tout") v = q(s.top) ? s.parts[0] + s.parts[1] : s.top - (q(s.parts[0]) ? s.parts[1] : s.parts[0]);
+  if (s.f === "tout") {
+    var conn = s.parts.filter(function (x) { return !q(x); }).reduce(function (a, b) { return a + b; }, 0);
+    v = q(s.top) ? conn : s.top - conn;
+  }
   else if (s.f === "cmp") v = q(s.grand) ? s.petit + s.ecart : q(s.petit) ? s.grand - s.ecart : s.grand - s.petit;
   else if (s.f === "egal") v = q(s.top) ? s.n * s.part : q(s.part) ? s.top / s.n : s.top / s.part;
   else if (s.f === "fois") v = q(s.grand) ? s.petit * s.k : s.grand / s.k;
@@ -270,11 +296,17 @@ function prop(a, tot) { var r = a > 0 && tot > 0 ? a / tot : 0.5; return Math.mi
 function svgSchema(s) {
   var W = 300, X = 10, L = 280, o = ['<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' + W + ' 130">'], v = valeurSchema(s);
   function val(x) { return x === "?" ? v : x; }
-  if (s.f === "tout") {
+  if (s.f === "tout" && s.parts.length === 2) {
     var p0 = val(s.parts[0]), p1 = val(s.parts[1]), w0 = L * prop(p0, p0 + p1);
     o.push(rectT(X, 12, L, 44, lab(s.top), s.top === "?"));
     o.push(rectT(X, 64, w0, 44, lab(s.parts[0]), s.parts[0] === "?"));
     o.push(rectT(X + w0, 64, L - w0, 44, lab(s.parts[1]), s.parts[1] === "?"));
+  } else if (s.f === "tout") {
+    /* 3 parties : largeurs proportionnelles, au moins 22 % chacune pour que les nombres restent lisibles */
+    var vs = s.parts.map(function (x) { var y = val(x); return y > 0 ? y : 1; }), tot = vs.reduce(function (a, b) { return a + b; }, 0);
+    var ws = vs.map(function (y) { return Math.max(0.22, y / tot); }), sw = ws.reduce(function (a, b) { return a + b; }, 0), xx = X;
+    o.push(rectT(X, 12, L, 44, lab(s.top), s.top === "?"));
+    s.parts.forEach(function (x, i) { var w = L * ws[i] / sw; o.push(rectT(xx, 64, w, 44, lab(x), x === "?")); xx += w; });
   } else if (s.f === "cmp") {
     var g = val(s.grand), pe = val(s.petit), wp = L * prop(pe, g);
     o.push(rectT(X, 10, L, 40, lab(s.grand), s.grand === "?"));
@@ -304,7 +336,7 @@ function svgSchema(s) {
   return o.join("");
 }
 function altSchema(s) {
-  if (s.f === "tout") return "Schéma : le tout " + lab(s.top) + " ; les parties " + lab(s.parts[0]) + " et " + lab(s.parts[1]) + ".";
+  if (s.f === "tout") return "Schéma : le tout " + lab(s.top) + " ; les parties " + s.parts.slice(0, -1).map(lab).join(", ") + " et " + lab(s.parts[s.parts.length - 1]) + ".";
   if (s.f === "cmp") return "Schéma : grande barre " + lab(s.grand) + ", petite barre " + lab(s.petit) + ", écart " + lab(s.ecart) + ".";
   if (s.f === "egal") return "Schéma : le tout " + lab(s.top) + " ; " + (s.n === "?" ? "?" : s.n) + " parts de " + lab(s.part) + ".";
   return "Schéma : petite quantité " + lab(s.petit) + " ; grande quantité " + lab(s.grand) + ", " + s.k + " fois la petite.";
@@ -316,6 +348,15 @@ function deuxParties(lim, mini) {
   for (;;) {
     var t = rnd(Math.min(lim, Math.max(3 * mini + 6, Math.floor(lim / 4))), lim);
     for (var k = 0; k < 20; k++) { var a = rnd(mini, t - mini); if (Math.abs(2 * a - t) >= t / 8) return [a, t - a, t]; }
+  }
+}
+/* a + b + c = t, chaque partie ≥ mini et assez différente des autres pour se voir */
+function troisParties(lim, mini) {
+  mini = Math.min(mini || 8, Math.floor(lim / 6));
+  for (;;) {
+    var t = rnd(Math.min(lim, Math.max(4 * mini + 6, Math.floor(lim / 3))), lim);
+    var a = rnd(mini, t - 2 * mini), b = rnd(mini, t - a - mini), c = t - a - b;
+    if (c >= mini && a !== b && b !== c && a !== c) return [a, b, c, t];
   }
 }
 function facteur(p) { return pick(p.tables || [2, 3, 4, 5, 6, 7, 8, 9]); }
@@ -347,6 +388,31 @@ var CAS = {
       [function (n) { return ["Dans la classe, il y a " + n.n + " tables. Sur chaque table, il y a " + n.b + " crayons. Combien de crayons y a-t-il en tout ?", "crayons", "Il y a " + n.r + " crayons en tout."]; }, { f: function () { return rnd(2, 8); } }],
       [function (n, P) { return [P[0] + " fait " + n.n + " tours de piste. Un tour mesure " + n.b + " m. Combien de mètres court-" + il(P) + " ?", "m", P[0] + " court " + n.r + " m."]; }, { f: function () { return Math.random() < 0.5 ? 10 * rnd(5, 9) : 100 * rnd(1, 4); } }],
       [function (n) { return ["Le cuisinier prend " + n.n + " boîtes. Chaque boîte contient " + n.b + " œufs. Combien d'œufs a-t-il ?", "œufs", "Le cuisinier a " + n.r + " œufs."]; }, { f: function () { return pick([6, 10, 12]); } }]
+    ] },
+  s1_trois: { s: 1, op: "+", aide: "Je cherche le tout : le ? est sur la grande barre, au-dessus des trois parties.",
+    aideOp: "Je cherche le tout avec des parties différentes : j'additionne les trois parties.",
+    nombres: function (p, lim, o) { var x = troisParties(lim, o.min); return { a: x[0], b: x[1], c: x[2], r: x[3] }; },
+    expr: function (n) { return n.a + " + " + n.b + " + " + n.c; },
+    schemas: function (n) { var M = Math.max(n.a, n.b, n.c), m = Math.min(n.a, n.b, n.c);
+      return [{ f: "tout", top: "?", parts: [n.a, n.b, n.c] }, { f: "tout", top: "?", parts: [n.a, n.b] }, { f: "cmp", grand: M, petit: m, ecart: "?" }]; },
+    ctx: [
+      [function (n, P) { return ["Pour son collier, " + P[0] + " a " + n.a + " perles bleues, " + n.b + " perles roses et " + n.c + " perles dorées. Combien de perles a-t-" + il(P) + " en tout ?", "perles", P[0] + " a " + n.r + " perles en tout."]; }, { max: 600 }],
+      [function (n) { return ["À la piscine, " + n.a + " enfants nagent le matin, " + n.b + " à midi et " + n.c + " le soir. Combien d'enfants sont venus nager ?", "enfants", n.r + " enfants sont venus nager."]; }, { max: 999 }],
+      [function (n) { var D = doudou(); return [cap(D[0]) + " range sa pêche : " + n.a + " sardines, " + n.b + " harengs et " + n.c + " maquereaux. Combien de poissons a-t-" + il(D) + " ?", "poissons", cap(D[0]) + " a " + n.r + " poissons.", "Il a promis de ne pas tout manger d'un coup !"]; }, { max: 300 }],
+      [function (n) { return ["La bibliothèque reçoit " + n.a + " albums, " + n.b + " bandes dessinées et " + n.c + " romans. Combien de livres reçoit-elle ?", "livres", "La bibliothèque reçoit " + n.r + " livres."]; }, { max: 9999 }],
+      [function (n) { var M = maitresse(); return ["Pour la fête de l'école, la classe de " + M[0] + " vend " + n.a + " crêpes, " + n.b + " gaufres et " + n.c + " parts de gâteau. Combien de gourmandises vend-elle ?", "gourmandises", "La classe vend " + n.r + " gourmandises."]; }, { max: 500 }]
+    ] },
+  s1_perimetre: { s: 1, op: "×", aide: "Le carré a 4 côtés pareils : le tour, c'est le tout, fait de 4 parts égales.",
+    aideOp: "Je cherche le tour d'un carré : 4 côtés identiques, je fais une multiplication.",
+    nombres: function (p, lim, o) { var b = o.f(); return { n: 4, b: b, r: 4 * b }; },
+    expr: function (n) { return "4 × " + n.b; },
+    schemas: function (n) { return [{ f: "egal", top: "?", n: 4, part: n.b }, { f: "tout", top: "?", parts: [n.b, n.b] }, { f: "tout", top: "?", parts: [4, n.b] }]; },
+    ctx: [
+      [function (n, P) { return ["Le bassin des petits est un carré de " + n.b + " m de côté. " + P[0] + " en fait une fois le tour. Combien de mètres parcourt-" + il(P) + " ?", "m", P[0] + " parcourt " + n.r + " m."]; }, { f: function () { return rnd(6, 25); } }],
+      [function (n, P) { return [P[0] + " colle un ruban tout autour d'un cadre carré. Chaque côté mesure " + n.b + " cm. Quelle longueur de ruban lui faut-il ?", "cm", "Il lui faut " + n.r + " cm de ruban."]; }, { f: function () { return rnd(12, 45); } }],
+      [function (n) { var D = doudou(); return [cap(D[0]) + " construit un enclos carré pour ses poissons. Chaque côté mesure " + n.b + " m. Quelle longueur de grillage lui faut-il ?", "m", "Il faut " + n.r + " m de grillage.", "Les poissons, eux, auraient préféré la mer…"]; }, { f: function () { return rnd(5, 30); } }],
+      [function (n) { return ["Le bac à sable de l'école est un carré de " + n.b + " dm de côté. Combien mesure son tour ?", "dm", "Le tour du bac à sable mesure " + n.r + " dm."]; }, { f: function () { return rnd(15, 40); } }],
+      [function (n) { return ["Un champ carré a des côtés de " + n.b + " m. Le fermier pose une clôture tout autour. Quelle est la longueur de la clôture ?", "m", "La clôture mesure " + n.r + " m."]; }, { f: function () { return 10 * rnd(5, 25); } }]
     ] },
   s2_complement: { s: 2, op: "−", aide: "Je connais le tout et une partie : le ? est sur l'autre partie.",
     aideOp: "Je cherche une partie du tout : je fais une soustraction.",
@@ -383,14 +449,18 @@ var CAS = {
     ] },
   s3_part: { s: 3, op: "÷", aide: "Je partage le tout en parts égales : le ? est sur chaque part.",
     aideOp: "Je fais un partage et je cherche la valeur d'une part : je fais une division.",
-    nombres: function (p) { var k = facteur(p), q = rnd(2, 10); return { t: k * q, k: k, r: q }; },
+    nombres: function (p, lim, o) {
+      if (o && o.grand) { var k2 = pick([2, 4, 5, 10]), q2 = 5 * rnd(10, 60); return { t: k2 * q2, k: k2, r: q2 }; } /* 1 020 ÷ 4 : par la décomposition */
+      var k = facteur(p), q = rnd(2, 10); return { t: k * q, k: k, r: q }; },
     expr: function (n) { return n.t + " ÷ " + n.k; },
     schemas: function (n) { return [{ f: "egal", top: n.t, n: n.k, part: "?" }, { f: "egal", top: "?", n: n.k, part: n.t }, { f: "tout", top: n.t, parts: [n.k, "?"] }]; },
     ctx: [
       [function (n, P) { return [P[0] + " range " + n.t + " livres sur " + n.k + " étagères. Il y a autant de livres sur chaque étagère. Combien de livres y a-t-il sur chaque étagère ?", "livres", "Il y a " + n.r + " livres sur chaque étagère."]; }, {}],
-      [function (n) { return ["La maîtresse partage " + n.t + " feutres entre " + n.k + " groupes. Chaque groupe reçoit autant de feutres. Combien de feutres reçoit chaque groupe ?", "feutres", "Chaque groupe reçoit " + n.r + " feutres."]; }, {}],
+      [function (n) { return [cap(maitresse()[0]) + " partage " + n.t + " feutres entre " + n.k + " groupes. Chaque groupe reçoit autant de feutres. Combien de feutres reçoit chaque groupe ?", "feutres", "Chaque groupe reçoit " + n.r + " feutres."]; }, {}],
       [function (n) { return [n.k + " enfants gagnent " + n.t + " € ensemble. Ils partagent la somme en parts égales. Combien d'euros reçoit chaque enfant ?", "€", "Chaque enfant reçoit " + n.r + " €."]; }, {}],
-      [function (n) { return ["Une corde de " + n.t + " m est coupée en " + n.k + " morceaux de même longueur. Combien mesure chaque morceau ?", "m", "Chaque morceau mesure " + n.r + " m."]; }, {}]
+      [function (n) { return ["Une corde de " + n.t + " m est coupée en " + n.k + " morceaux de même longueur. Combien mesure chaque morceau ?", "m", "Chaque morceau mesure " + n.r + " m."]; }, {}],
+      [function (n) { return ["Pour la fête du quartier, " + n.k + " familles louent ensemble une grande tente à " + n.t + " €. Chaque famille paie la même somme. Combien paie chaque famille ?", "€", "Chaque famille paie " + n.r + " €."]; }, { grand: true }],
+      [function (n, P) { return ["Le grand-père de " + P[0] + " plante " + n.t + " bulbes de tulipes dans " + n.k + " jardinières, autant dans chacune. Combien de bulbes met-il dans chaque jardinière ?", "bulbes", "Il met " + n.r + " bulbes dans chaque jardinière."]; }, { grand: true }]
     ] },
   s3_nombre: { s: 3, op: "÷", aide: "Je fais des parts toutes pareilles : le ? est sur le nombre de parts.",
     aideOp: "Je fais un partage et je cherche le nombre de parts : je fais une division.",
@@ -461,32 +531,125 @@ var CAS = {
     ] }
 };
 
+/* ---- problèmes à deux étapes (« stratégie » 9) : une question intermédiaire, puis la question finale. Pas d'étape schéma.
+   ctx → [énoncé, unité, phrase réponse, blague ou null, question intermédiaire] ; etapes(n) → [{ op, expr, r }, { op, expr, r }] */
+function gourmand(x) { return genre(x) === "f" ? "gourmande" : "gourmand"; }
+function enfantOu(P) { var e = (G.perso || {}).enfant; return e && e[0] ? e : [P[0], P.g]; }
+var CAS2 = {
+  e2_gagne_donne: { s: 9, aides: ["D'abord, j'ajoute ce qui arrive : je fais une addition.", "Ensuite, j'enlève ce qui part : je fais une soustraction."],
+    nombres: function (p, lim, o) { var m = o.min || 5;
+      for (;;) { var a = rnd(m, lim - m), b = rnd(m, lim - a), s1 = a + b, c = rnd(m, s1 - m); if (s1 <= lim && s1 - c >= m && c !== a && c !== b) return { a: a, b: b, s: s1, c: c, r: s1 - c }; } },
+    etapes: function (n) { return [{ op: "+", expr: n.a + " + " + n.b, r: n.s }, { op: "−", expr: n.s + " − " + n.c, r: n.r }]; },
+    ctx: [
+      [function (n, P) { return [P[0] + " a " + n.a + " images. À la récré, " + il(P) + " en gagne " + n.b + ". Puis " + il(P) + " en donne " + n.c + " à " + P[1][0] + ". Combien d'images a-t-" + il(P) + " maintenant ?",
+        "images", P[0] + " a maintenant " + n.r + " images.", null, "Combien d'images " + P[0] + " a-t-" + il(P) + " après la récré ?"]; }, { max: 200 }],
+      [function (n, P) { var Pa = unParent(), E = enfantOu(P); return [cap(Pa[0]) + " cueille " + n.a + " g de mûres le matin et " + n.b + " g l'après-midi. " + Il(Pa) + " en met " + n.c + " g dans une tarte. Combien de grammes de mûres reste-t-il ?",
+        "g", "Il reste " + n.r + " g de mûres.", "On suppose que " + E[0] + " n'en a pas mangé en cachette… " + cap(gourmand(E)) + " !", "Combien de grammes de mûres " + Pa[0] + " a-t-" + il(Pa) + " cueillis en tout ?"]; }, { max: 999, min: 50 }],
+      [function (n) { return ["Le bus part avec " + n.a + " passagers. Au premier arrêt, " + n.b + " personnes montent. Au deuxième arrêt, " + n.c + " personnes descendent. Combien de passagers y a-t-il maintenant ?",
+        "passagers", "Il y a maintenant " + n.r + " passagers.", null, "Combien de passagers y a-t-il après le premier arrêt ?"]; }, { max: 99, min: 4 }],
+      [function (n, P) { var D = doudou(); return [cap(D[0]) + " a " + n.a + " poissons dans son seau. " + P[0] + " lui en apporte " + n.b + ". " + cap(gourmand(D)) + ", " + D[0] + " en mange " + n.c + ". Combien de poissons reste-t-il dans le seau ?",
+        "poissons", "Il reste " + n.r + " poissons dans le seau.", "Et maintenant, petite sieste sur la banquise !", "Combien de poissons y a-t-il dans le seau avant le repas ?"]; }, { max: 150 }]
+    ] },
+  e2_depenses: { s: 9, aides: ["D'abord, je réunis les deux quantités enlevées : je fais une addition.", "Ensuite, j'enlève ce total : je fais une soustraction."],
+    nombres: function (p, lim, o) { var m = o.min || 5;
+      for (;;) { var B = rnd(Math.max(4 * m, Math.floor(lim / 3)), lim), a = rnd(m, B), b = rnd(m, B); if (a + b <= B - m && a !== b) return { B: B, a: a, b: b, s: a + b, r: B - a - b }; } },
+    etapes: function (n) { return [{ op: "+", expr: n.a + " + " + n.b, r: n.s }, { op: "−", expr: n.B + " − " + n.s, r: n.r }]; },
+    ctx: [
+      [function (n) { var M = maitresse(); return ["La classe de " + M[0] + " a " + n.B + " € pour la sortie. Le car coûte " + n.a + " € et le musée coûte " + n.b + " €. Combien d'argent reste-t-il ?",
+        "€", "Il reste " + n.r + " €.", null, "Combien coûtent le car et le musée ensemble ?"]; }, { max: 2000, min: 40 }],
+      [function (n, P) { return [P[0] + " a " + n.B + " € dans sa tirelire. " + Il(P) + " achète un livre à " + n.a + " € et un jeu à " + n.b + " €. Combien d'argent lui reste-t-il ?",
+        "€", "Il lui reste " + n.r + " €.", null, "Combien " + P[0] + " dépense-t-" + il(P) + " en tout ?"]; }, { max: 150, min: 4 }],
+      [function (n, P) { return ["Une pelote de laine fait " + n.B + " cm. " + P[0] + " en coupe " + n.a + " cm, puis " + P[1][0] + " en coupe " + n.b + " cm. Combien de centimètres de laine reste-t-il ?",
+        "cm", "Il reste " + n.r + " cm de laine.", null, "Combien de centimètres ont été coupés en tout ?"]; }, { max: 999, min: 20 }],
+      [function (n, P) { return ["Le puzzle de " + P[0] + " a " + n.B + " pièces. Lundi, " + il(P) + " en pose " + n.a + ". Mardi, " + il(P) + " en pose " + n.b + ". Combien de pièces reste-t-il à poser ?",
+        "pièces", "Il reste " + n.r + " pièces à poser.", null, "Combien de pièces " + P[0] + " a-t-" + il(P) + " posées lundi et mardi ?"]; }, { max: 1000, min: 30 }]
+    ] },
+  e2_groupes_fois: { s: 9, aides: ["D'abord, je cherche le premier total : je fais une multiplication.", "Ensuite, ce total se répète : je multiplie encore."],
+    nombres: function (p, lim, o) { var x = o.x(), y = o.y(), z = o.z(); return { x: x, y: y, s: x * y, z: z, r: x * y * z }; },
+    etapes: function (n) { return [{ op: "×", expr: n.x + " × " + n.y, r: n.s }, { op: "×", expr: n.s + " × " + n.z, r: n.r }]; },
+    ctx: [
+      [function (n, P) { var Pa = unParent(); return [P[0] + " et " + Pa[0] + " vont à la piscine en bus. Un trajet coûte " + n.x + " €. " + cap(ils(P, Pa)) + " font l'aller et le retour. Combien paient-" + ils(P, Pa) + " en tout ?",
+        "€", cap(ils(P, Pa)) + " paient " + n.r + " € en tout.", null, "Combien coûtent l'aller et le retour pour une personne ?"]; },
+        { x: function () { return rnd(2, 9); }, y: function () { return 2; }, z: function () { return 2; } }],
+      [function (n, P) { return ["Un tour de manège coûte " + n.x + " €. " + P[0] + " fait " + n.y + " tours, et " + P[1][0] + " aussi. Combien paient-" + ils(P, P[1]) + " en tout ?",
+        "€", cap(ils(P, P[1])) + " paient " + n.r + " € en tout.", null, "Combien paie " + P[0] + " ?"]; },
+        { x: function () { return rnd(2, 5); }, y: function () { return rnd(2, 6); }, z: function () { return 2; } }],
+      [function (n) { var M = maitresse(); return ["Une boîte contient " + n.x + " paquets de " + n.y + " biscuits. " + cap(M[0]) + " achète " + n.z + " boîtes pour la classe. Combien de biscuits y a-t-il en tout ?",
+        "biscuits", "Il y a " + n.r + " biscuits en tout.", null, "Combien de biscuits y a-t-il dans une boîte ?"]; },
+        { x: function () { return rnd(2, 5); }, y: function () { return rnd(4, 10); }, z: function () { return rnd(2, 5); } }],
+      [function (n) { var D = doudou(); return [cap(D[0]) + " mange " + n.x + " poissons à chaque repas. " + Il(D) + " fait " + n.y + " repas par jour. Combien de poissons mange-t-" + il(D) + " en " + n.z + " jours ?",
+        "poissons", cap(D[0]) + " mange " + n.r + " poissons en " + n.z + " jours.", "Quel appétit !", "Combien de poissons mange-t-" + il(D) + " en un jour ?"]; },
+        { x: function () { return rnd(2, 6); }, y: function () { return rnd(2, 4); }, z: function () { return rnd(2, 7); } }]
+    ] },
+  e2_groupes_plus: { s: 9, aides: ["D'abord, je cherche le total des groupes égaux : je fais une multiplication.", "Ensuite, j'ajoute ceux qui restent : je fais une addition."],
+    nombres: function (p, lim, o) { var n1 = rnd(2, 9), k = o.k ? o.k() : rnd(3, 10), e = rnd(3, 40); return { n: n1, k: k, s: n1 * k, e: e, r: n1 * k + e }; },
+    etapes: function (n) { return [{ op: "×", expr: n.n + " × " + n.k, r: n.s }, { op: "+", expr: n.s + " + " + n.e, r: n.r }]; },
+    ctx: [
+      [function (n) { var M = maitresse(); return [cap(M[0]) + " a " + n.n + " boîtes de " + n.k + " craies et encore " + n.e + " craies dans sa trousse. Combien de craies a-t-" + il(M) + " en tout ?",
+        "craies", cap(M[0]) + " a " + n.r + " craies en tout.", null, "Combien de craies y a-t-il dans les boîtes ?"]; }, {}],
+      [function (n, P) { var Pa = unParent(); return ["Pour la fête, " + Pa[0] + " achète " + n.n + " paquets de " + n.k + " ballons. " + P[0] + " trouve encore " + n.e + " ballons dans le placard. Combien de ballons ont-" + ils(P, Pa) + " pour la fête ?",
+        "ballons", cap(ils(P, Pa)) + " ont " + n.r + " ballons pour la fête.", null, "Combien de ballons y a-t-il dans les paquets ?"]; }, {}],
+      [function (n) { return ["À la piscine, " + n.n + " groupes de " + n.k + " enfants nagent. " + n.e + " enfants attendent au bord du bassin. Combien d'enfants y a-t-il à la piscine ?",
+        "enfants", "Il y a " + n.r + " enfants à la piscine.", null, "Combien d'enfants nagent ?"]; }, {}],
+      [function (n, P) { return [P[0] + " remplit " + n.n + " pages de son album, avec " + n.k + " autocollants par page. Puis " + il(P) + " en colle " + n.e + " sur la couverture. Combien d'autocollants a-t-" + il(P) + " collés ?",
+        "autocollants", P[0] + " a collé " + n.r + " autocollants.", null, "Combien d'autocollants y a-t-il sur les pages ?"]; }, { k: function () { return pick([4, 5, 6, 8, 10, 12]); } }]
+    ] },
+  e2_total_partage: { s: 9, aides: ["D'abord, je réunis les deux quantités : je fais une addition.", "Ensuite, je partage en parts égales : je fais une division."],
+    nombres: function (p, lim, o) { var m = o.min || 3;
+      /* partage dans les tables (q ≤ 10), sauf en deux (moitié) ou pour une somme ronde (multiple de 5) */
+      for (;;) { var k = o.k ? o.k() : rnd(2, 5), q = o.q ? o.q() : rnd(3, 10), t = k * q, a = rnd(m, t - m); if (t <= lim && Math.abs(2 * a - t) >= t / 8) return { a: a, b: t - a, s: t, k: k, r: q }; } },
+    etapes: function (n) { return [{ op: "+", expr: n.a + " + " + n.b, r: n.s }, { op: "÷", expr: n.s + " ÷ " + n.k, r: n.r }]; },
+    ctx: [
+      [function (n, P) { var I = ils(P, P[1]); return [P[0] + " ramasse " + n.a + " coquillages et " + P[1][0] + " en ramasse " + n.b + ". " + cap(I) + " les partagent en deux parts égales. Combien de coquillages a " + chacun(P, P[1]) + " ?",
+        "coquillages", cap(chacun(P, P[1])) + " a " + n.r + " coquillages.", null, "Combien de coquillages ont-" + I + " ramassés en tout ?"]; }, { k: function () { return 2; }, q: function () { return rnd(6, 50); } }],
+      [function (n) { return ["La classe gagne " + n.a + " € à la tombola et " + n.b + " € au marché de Noël. Elle partage l'argent entre " + n.k + " projets, en parts égales. Combien reçoit chaque projet ?",
+        "€", "Chaque projet reçoit " + n.r + " €.", null, "Combien la classe gagne-t-elle en tout ?"]; }, { k: function () { return pick([2, 4, 5]); }, q: function () { return 10 * rnd(3, 30); }, min: 20 }],
+      [function (n, P) { var Pa = unParent(), I = ils(P, Pa); return [cap(Pa[0]) + " cueille " + n.a + " fraises et " + P[0] + " en cueille " + n.b + ". " + cap(I) + " les mettent dans " + n.k + " barquettes, autant dans chacune. Combien de fraises y a-t-il dans chaque barquette ?",
+        "fraises", "Il y a " + n.r + " fraises dans chaque barquette.", "Promis, personne n'en a croqué une en route !", "Combien de fraises ont-" + I + " cueillies en tout ?"]; }, {}],
+      [function (n) { var D = doudou(); return [cap(D[0]) + " pêche " + n.a + " poissons le matin et " + n.b + " l'après-midi. " + Il(D) + " les range dans " + n.k + " seaux, autant dans chaque seau. Combien de poissons y a-t-il dans chaque seau ?",
+        "poissons", "Il y a " + n.r + " poissons dans chaque seau.", null, "Combien de poissons a-t-" + il(D) + " pêchés en tout ?"]; }, {}]
+    ] }
+};
+Object.keys(CAS2).forEach(function (k) { CAS[k] = CAS2[k]; CAS[k].e2 = true; });
+
 /* texte lu par la synthèse vocale : unités en toutes lettres */
 function oralUnites(t) {
   return t.replace(/(\d) €/g, "$1 euros").replace(/(\d) kg\b/g, "$1 kilos").replace(/(\d) cm\b/g, "$1 centimètres")
-          .replace(/(\d) m\b/g, "$1 mètres").replace(/(\d) L\b/g, "$1 litres").replace(/(\d) (\d{3})\b/g, "$1$2");
+          .replace(/(\d) m\b/g, "$1 mètres").replace(/(\d) L\b/g, "$1 litres").replace(/(\d) g\b/g, "$1 grammes").replace(/(\d) dm\b/g, "$1 décimètres").replace(/(\d) (\d{3})\b/g, "$1$2");
 }
 /* espaces insécables : « ? » et l'unité ne partent jamais seuls à la ligne */
-function insecables(t) { return t.replace(/ \?/g, "\u00a0?").replace(/(\d) (€|kg|cm|m|L)(?![a-zà-ü])/g, "$1\u00a0$2"); }
+function insecables(t) { return t.replace(/ \?/g, "\u00a0?").replace(/ !/g, "\u00a0!").replace(/(\d) (€|kg|cm|dm|m|g|L)(?![a-zà-ü])/g, "$1\u00a0$2"); }
+function texte(t) { return insecables(elisions(t)); }
+function oral(t) { return oralUnites(elisions(t)); }
 G.probleme = function (p) {
   var ids = p.problemes && p.problemes.length ? p.problemes : Object.keys(CAS).filter(function (k) {
-    return !p.strategies || p.strategies.indexOf(CAS[k].s) >= 0; });
+    return p.strategies ? p.strategies.indexOf(CAS[k].s) >= 0 : CAS[k].s !== 9; }); /* deux étapes (9) : seulement sur demande */
   var id = pick(ids), C = CAS[id], cx = pick(C.ctx), d = deuxPrenoms(), P = { 0: d[0][0], g: d[0][1], 1: d[1] };
   var lim = Math.min(p.limite || 999, cx[1].max || 9999), n;
   /* nombres dans la limite, et aucun mauvais schéma qui donnerait par hasard la bonne réponse (2 + 2 = 2 × 2) */
   for (var essai = 0; essai < 200; essai++) {
     n = C.nombres(p, lim, cx[1]);
-    var grand = Math.max(n.r, n.t || 0, n.g || 0, n.a || 0, n.b || 0, n.e || 0, n.p || 0);
-    var ambigu = C.schemas(n).slice(1).some(function (s) { return valeurSchema(s) === n.r; });
+    var grand = Math.max.apply(null, Object.keys(n).map(function (k) { return n[k]; }));
+    var ambigu = !C.e2 && C.schemas(n).slice(1).some(function (s) { return valeurSchema(s) === n.r; });
     if (grand <= lim && !ambigu) break;
   }
   var nd = {};
   for (var k in n) nd[k] = n[k] >= 1000 ? fmt(n[k]) : n[k]; /* 4 386 à l'écran */
-  var tx = cx[0](nd, P), e = C.expr(nd);
+  var tx = cx[0](nd, P);
+  if (C.e2) {
+    var et = C.etapes(n), etd = C.etapes(nd), derniere = tx[0].replace(/^.*[.!]\s/, ""); /* la question finale de l'énoncé */
+    return { consigne: { texte: texte(tx[0]), oral: oral(tx[0]) }, expression: etd[1].expr, reponse: String(n.r),
+             probleme: { cas: id, strategie: 9, op: et[1].op, calcul: etd[1].expr, unite: tx[1], phrase: texte(tx[2]), phrase_oral: oral(tx[2]),
+                         blague: tx[3] ? texte(tx[3]) : null, blague_oral: tx[3] ? oral(tx[3]) : null, aide: "", aideOp: C.aides[1], piege: false, schemas: [],
+                         etapes: et.map(function (x, i) { return { op: x.op, calcul: etd[i].expr, reponse: String(x.r), aideOp: C.aides[i],
+                           question: texte(i === 0 ? tx[4] : derniere), question_oral: oral(i === 0 ? tx[4] : derniere) }; }) } };
+  }
+  var e = C.expr(nd);
   var sch = C.schemas(n).map(function (s, i) { return { spec: s, bon: i === 0 }; });
   for (var i = sch.length - 1; i > 0; i--) { var j = rnd(0, i), x = sch[i]; sch[i] = sch[j]; sch[j] = x; }
-  return { consigne: { texte: insecables(tx[0]), oral: oralUnites(tx[0]) }, expression: e, reponse: String(n.r),
-           probleme: { cas: id, strategie: C.s, op: C.op, calcul: e, unite: tx[1], phrase: insecables(tx[2]), phrase_oral: oralUnites(tx[2]),
+  return { consigne: { texte: texte(tx[0]), oral: oral(tx[0]) }, expression: e, reponse: String(n.r),
+           probleme: { cas: id, strategie: C.s, op: C.op, calcul: e, unite: tx[1], phrase: texte(tx[2]), phrase_oral: oral(tx[2]),
+                       blague: tx[3] ? texte(tx[3]) : null, blague_oral: tx[3] ? oral(tx[3]) : null,
                        aide: C.aide, aideOp: C.aideOp, piege: !!C.piege,
                        schemas: sch.map(function (x) { return { svg: svgSchema(x.spec), alt: altSchema(x.spec), spec: x.spec, bon: x.bon }; }) } };
 };

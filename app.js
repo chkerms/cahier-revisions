@@ -1,10 +1,10 @@
 /* Cahier de révisions : lecteur de leçons chiffrées. Aucune dépendance externe. */
 "use strict";
 (function () {
-var VERSION = "1.9.0";
+var VERSION = "1.10.0";
 var app = document.getElementById("app");
 var nextBar = document.getElementById("next");
-var D = null, IMG = {}, LESSONS = [], VUE = null, CTX = null; /* CTX : leçon d'origine de la question affichée (quiz transverse) */
+var D = null, IMG = {}, LESSONS = [], VUE = null, CTX = null, PERSO = null; /* CTX : leçon d'origine de la question affichée (quiz transverse) */
 
 /* ------------------------------------------------------------ réglages et stockage */
 function reglages() { try { return JSON.parse(localStorage.getItem("reglages") || "{}"); } catch (e) { return {}; } }
@@ -163,10 +163,11 @@ function decryptLesson(env, key) {
 
 /* ------------------------------------------------------------ chargement des leçons */
 function loadLessons(key) {
-  var bad = 0;
+  var bad = 0, persoMaj = null;
   var remote = fetch("lecons/index.json", { cache: "no-store" }).then(function (r) { return r.ok ? r.json() : { lecons: [] }; })
     .catch(function () { return { lecons: [] }; })
     .then(function (idx) {
+      persoMaj = idx.perso ? idx.perso.maj || "1" : null;
       return Promise.all(idx.lecons.map(function (e) {
         return fetch("lecons/" + e.f + "?m=" + encodeURIComponent(e.maj || ""), { cache: "no-cache" })
           .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
@@ -175,7 +176,14 @@ function loadLessons(key) {
       }));
     });
   var local = idb.get("imports").then(function (v) { return v || []; }).catch(function () { return []; });
-  return Promise.all([remote, local]).then(function (r) {
+  /* personnalisation des problèmes (prénoms, maîtresse, doudou…) : chiffrée comme les leçons, facultative */
+  /* déclarée dans l'index (« perso ») : pas de requête quand il n'y en a pas */
+  var perso = remote.then(function () {
+    if (!persoMaj) return null;
+    return fetch("lecons/perso.json?m=" + encodeURIComponent(persoMaj), { cache: "no-cache" }).then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (env) { return env && env.ct ? decryptLesson(env, key) : null; });
+  }).catch(function () { return null; }).then(function (p) { PERSO = p && typeof p === "object" ? p : null; });
+  return Promise.all([remote, local, perso]).then(function (r) {
     var all = {}, list = r[0].filter(Boolean).concat(r[1].map(function (l) { l._importee = true; return l; }));
     list.forEach(function (l) { if (l && l.meta && l.meta.id) all[l.meta.id] = l; });
     LESSONS = Object.keys(all).map(function (k) { return all[k]; })
@@ -485,7 +493,7 @@ function shell() {
         TTS.stop();
         for (var j = 0; j < i; j++) if (!state.done[D.parcours[j]]) journal.etape("sautees", D.parcours[j]);
         state.step = i; render(); } },
-      h("span", { "aria-hidden": "true", text: STEP_META[s].icon }), h("span", { class: "lbl", text: STEP_META[s].label }), state.done[s] ? h("span", { class: "done", text: " ✓" }) : null);
+      h("span", { "aria-hidden": "true", text: D._probs ? "💡" : STEP_META[s].icon }), h("span", { class: "lbl", text: D._probs ? "Problèmes" : STEP_META[s].label }), state.done[s] ? h("span", { class: "done", text: " ✓" }) : null);
   })));
   app.appendChild(h("div", { class: "bar", id: "bar" }, h("i")));
   var main = h("main", { id: "main" }); app.appendChild(main);
@@ -718,18 +726,19 @@ function renderEnd() {
   TTS.stop(); CTX = null;
   var main = shell(); setProgress(1); setNext(null);
   var nom = reglagesProfil().prenom ? " " + reglagesProfil().prenom : "";
-  if (!D._quiz) { var pr = store.get(); store.patch({ fini: true, best: Math.max(pr.best || 0, state.stars) }); }
+  if (!D._quiz && !D._probs) { var pr = store.get(); store.patch({ fini: true, best: Math.max(pr.best || 0, state.stars) }); }
   var revoir = D._quiz ? leconsARevoir() : [];
   journal.marque({ terminee: true, etoiles: state.stars });
   main.appendChild(h("div", { class: "card end", id: "fin" }, h("div", { class: "big", text: "🏆" }),
     h("h2", { text: "Bravo" + nom + " !" }), h("p", { text: "Tu as gagné " + state.stars + " étoile" + (state.stars > 1 ? "s" : "") + " ⭐" }),
     revoir.length ? h("div", { class: "a-revoir", id: "a-revoir" }, h("p", { text: "📖 Pour progresser, relis " + (revoir.length > 1 ? "ces leçons" : "cette leçon") + " :" }),
       revoir.map(function (l) { return h("button", { class: "btn soft", type: "button", "data-revoir": l.meta.id, onclick: function () { openLesson(l); } }, "📖 Revoir ", rich(l.meta.titre)); })) : null,
-    (!D._quiz && defiDispo(D)) ? h("div", { class: "actions" }, h("button", { class: "btn soft", type: "button", "data-defi-fin": D.meta.id,
+    (!D._quiz && !D._probs && defiDispo(D)) ? h("div", { class: "actions" }, h("button", { class: "btn soft", type: "button", "data-defi-fin": D.meta.id,
       text: "⏱️ Défi chrono sur cette leçon", onclick: (function (l) { return function () { renderDefi(l); }; })(D) })) : null,
     h("div", { class: "actions" },
       h("button", { class: "btn", type: "button", text: "🔁 Recommencer", onclick: function () {
         if (D._quiz) return openQuiz(D._quiz);
+        if (D._probs) return openProblemes();
         state = { step: 0, done: {}, stars: 0 }; journal.debut(D); render(); } }),
       h("button", { class: "btn primary", type: "button", id: "btn-retour", text: "🏠 Mes leçons", onclick: function () { renderHome(); } }))));
   if (TTS.auto) TTS.speak([{ text: "Bravo" + nom + " ! Tu as gagné " + state.stars + " étoiles.", lang: "fr-FR" }]);
@@ -737,8 +746,16 @@ function renderEnd() {
 
 
 /* ------------------------------------------------------------ calculs (pavé numérique) */
+/* personnalisation donnée aux générateurs : lecons/perso.json, et à défaut le prénom du profil */
+function persoActif() {
+  var p = PERSO ? JSON.parse(JSON.stringify(PERSO)) : {}, pr = reglagesProfil().prenom;
+  if (!(p.enfant && p.enfant[0]) && pr && !profils.actif().test) p.enfant = [pr, p.genre_enfant || "f"];
+  return Object.keys(p).length ? p : null;
+}
+function genPerso() { if (window.GENERATEURS) window.GENERATEURS.G.perso = persoActif(); }
 function stepCalculs(main) {
   var ci = 0, first = 0;
+  genPerso();
   var CAL = (D.calculs || []).concat(window.GENERATEURS ? window.GENERATEURS.creer(D.generateurs) : []);
   CAL.forEach(function (c) { if (c.svg) { IMG[c.id] = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(c.svg); c.image = c.id; } });
   setNext(null);
@@ -749,8 +766,9 @@ function stepCalculs(main) {
     setProgress(ci / CAL.length);
     if (ci >= CAL.length) {
       journal.etape("finies", "calculs");
-      zone.appendChild(h("div", { class: "card end" }, h("div", { class: "big", text: "➕" }),
-        h("p", { text: first + " calcul" + (first > 1 ? "s" : "") + " réussi" + (first > 1 ? "s" : "") + " du premier coup sur " + CAL.length + " !" })));
+      var mot = CAL.every(function (c) { return c.probleme; }) ? "problème" : "calcul";
+      zone.appendChild(h("div", { class: "card end" }, h("div", { class: "big", text: mot === "problème" ? "💡" : "➕" }),
+        h("p", { text: first + " " + mot + (first > 1 ? "s" : "") + " réussi" + (first > 1 ? "s" : "") + " du premier coup sur " + CAL.length + " !" })));
       setProgress(1); setNext(nextLabel(), goNext); return;
     }
     var c = CAL[ci], val = "", tries = 0, done = false, saisies = [], evt = null;
@@ -833,12 +851,16 @@ function schemaImg(sc, cls) {
 }
 function probleme(c, gauche, droite, cb) {
   var P = c.probleme, bon = P.schemas.filter(function (x) { return x.bon; })[0];
-  var etat = { cas: P.cas, guide: probGuide(P.cas), schema: null, ops: [] }, saisies = [], val = "", tries = 0, fini = false;
+  /* un problème à deux étapes (P.etapes) : pas de schéma ; question intermédiaire, opération, calcul, puis la question finale */
+  var steps = P.etapes && P.etapes.length ? P.etapes : [{ op: P.op, calcul: P.calcul, reponse: c.reponse, aideOp: P.aideOp, question: null }];
+  var si = 0, S = steps[0], opsEtape = [], premierCoup = true, faits = [];
+  var etat = { cas: P.cas, guide: steps.length === 1 && probGuide(P.cas), schema: null, ops: [], etapes: steps.length }, saisies = [], val = "", tries = 0, fini = false;
   /* fb : aide du schéma, sous les schémas ; fd : opération, calcul et réponse, sous le pavé */
   var etape = h("div", { class: "petape" }), fb = h("div", { class: "pfb", "aria-live": "polite" }), fd = h("div", { class: "pfb pfd", "aria-live": "polite" });
   gauche.appendChild(etape); gauche.appendChild(fb);
   function journaliser(ok, termine) { cb.note({ saisies: saisies.slice(), reussi: ok, fini: termine, prob: JSON.parse(JSON.stringify(etat)) }); }
   function aide(texte, image, ou) {
+    if (!texte) return;
     (ou || fb).appendChild(h("div", { class: "hintbox" }, h("div", { class: "label", text: "💡 " + texte }), image ? schemaImg(bon, "seul") : null));
   }
   /* 1. schéma */
@@ -861,35 +883,49 @@ function probleme(c, gauche, droite, cb) {
   }
   /* 2. opération */
   function choisirOp() {
-    droite.innerHTML = "";
+    droite.innerHTML = ""; fd.innerHTML = ""; opsEtape = [];
+    faits.forEach(function (f) { droite.appendChild(h("div", { class: "pfait", text: "✓ " + f })); });
+    if (steps.length > 1) {
+      var qs = sayBtn(function () { return [{ text: S.question_oral || S.question, lang: "fr-FR" }]; });
+      droite.appendChild(h("div", { class: "card has-say pquestion", id: "pquestion-" + (si + 1) },
+        h("div", { class: "label", text: si === 0 ? "D'abord…" : "Ensuite…" }), h("p", { text: S.question }), qs));
+      if (TTS.auto && si > 0) TTS.speak([{ text: S.question_oral || S.question, lang: "fr-FR" }], qs);
+    }
     droite.appendChild(h("p", { class: "plabel", text: (etat.guide ? "2. " : "") + "Quelle opération fais-tu ?" }));
     var rang = h("div", { class: "ops" });
     OPS.forEach(function (o) {
       rang.appendChild(h("button", { class: "opkey", type: "button", "data-op": o, "aria-label": OPS_NOMS[o], text: o, onclick: function (ev) {
-        if (etat.ops.indexOf(o) >= 0 || etat.ops.indexOf(P.op) >= 0) return;
-        etat.ops.push(o);
+        if (opsEtape.indexOf(o) >= 0 || opsEtape.indexOf(S.op) >= 0) return;
+        opsEtape.push(o); etat.ops.push(o);
         var b = ev.currentTarget;
-        if (o === P.op) { b.classList.add("right"); journaliser(false, false); calculer(); return; }
-        b.classList.add("tried"); b.disabled = true;
-        if (etat.ops.length === 1) {
+        if (o === S.op) { b.classList.add("right"); journaliser(false, false); calculer(); return; }
+        b.classList.add("tried"); b.disabled = true; premierCoup = false;
+        if (opsEtape.length === 1) {
           fd.appendChild(h("div", { class: "feedback again", text: "Pas encore… Essaie une autre opération." }));
-          aide(P.aide, !etat.guide, fd);  /* sans l'étape schéma : le schéma s'affiche en aide */
+          if (steps.length === 1) aide(P.aide, !etat.guide, fd);  /* sans l'étape schéma : le schéma s'affiche en aide */
           journaliser(false, false);
         } else {
-          fd.appendChild(h("div", { class: "feedback again", text: P.aideOp }));
-          rang.querySelector('[data-op="' + P.op + '"]').classList.add("right");
-          etat.ops.push(P.op); journaliser(false, false); calculer();
+          fd.appendChild(h("div", { class: "feedback again", text: S.aideOp }));
+          rang.querySelector('[data-op="' + S.op + '"]').classList.add("right");
+          opsEtape.push(S.op); etat.ops.push(S.op); journaliser(false, false); calculer();
         }
       } }));
     });
     droite.appendChild(rang); droite.appendChild(fd);
   }
+  /* étape réussie (ou résultat donné après 3 essais) : étape suivante, ou fin du problème */
+  function etapeSuivante(trouve) {
+    faits.push(S.calcul + " = " + fmtNb(S.reponse) + " " + P.unite);
+    si++; S = steps[si]; val = ""; tries = 0;
+    var msg = trouve ? "Bravo ! Maintenant, l'étape suivante." : "Le résultat était " + fmtNb(steps[si - 1].reponse) + ". On continue !";
+    choisirOp();
+    fd.appendChild(h("div", { class: "feedback " + (trouve ? "good" : "again"), text: msg }));
+  }
   /* 3. calcul au pavé */
   function calculer() {
-    var parts = P.calcul.split(" " + P.op + " ");
     var disp = h("span", { class: "saisie vide", id: "saisie", "aria-live": "polite", text: "?" });
     function upd() { disp.textContent = val || "?"; disp.classList.toggle("vide", !val); }
-    var ligne = h("div", { class: "pcalcul" }, h("span", { text: parts[0] + " " + P.op + " " + parts[1] + " = " }), disp, h("span", { class: "unite", text: " " + P.unite }));
+    var ligne = h("div", { class: "pcalcul" }, h("span", { text: S.calcul + " = " }), disp, h("span", { class: "unite", text: " " + P.unite }));
     var pad = h("div", { class: "pad" }, ["1", "2", "3", "4", "5", "6", "7", "8", "9", "", "0", "⌫"].map(function (k) {
       if (!k) return h("span");
       return h("button", { class: "padkey" + (k === "⌫" ? " del" : ""), type: "button", "data-k": k, "aria-label": k === "⌫" ? "Effacer" : k, text: k, onclick: function () {
@@ -900,23 +936,30 @@ function probleme(c, gauche, droite, cb) {
     var ok = h("button", { class: "btn primary", type: "button", id: "btn-valider", text: "✓ Valider", onclick: function () {
       if (fini || !val) return;
       tries++; saisies.push(val);
-      if (Number(val) === Number(c.reponse)) {
-        fini = true; disp.classList.add("juste");
-        var sansFaute = etat.schema !== false && etat.ops.length === 1 && tries === 1;
-        probNote(P.cas, sansFaute); journaliser(true, true); cb.reussi(tries === 1);
+      if (Number(val) === Number(S.reponse)) {
+        disp.classList.add("juste");
+        if (tries > 1) premierCoup = false;
+        if (si < steps.length - 1) { journaliser(false, false); etapeSuivante(true); return; }
+        fini = true;
+        var sansFaute = etat.schema !== false && etat.ops.length === steps.length && premierCoup;
+        probNote(P.cas, sansFaute); journaliser(true, true); cb.reussi(premierCoup && etat.ops.length === steps.length);
         fd.innerHTML = "";
         fd.appendChild(h("div", { class: "feedback good", text: sansFaute ? "Bravo ! ⭐" : "Bravo, tu as trouvé ! 👏" }));
-        var rep = h("div", { class: "card has-say preponse" }, h("div", { class: "label", text: "✍️ Je réponds par une phrase" }), h("p", { class: "phrase", text: P.phrase }));
-        var sb = sayBtn(function () { return [{ text: P.phrase_oral, lang: "fr-FR" }]; }); rep.appendChild(sb);
+        var lu = P.phrase_oral + (P.blague_oral ? " " + P.blague_oral : "");
+        var rep = h("div", { class: "card has-say preponse" }, h("div", { class: "label", text: "✍️ Je réponds par une phrase" }), h("p", { class: "phrase", text: P.phrase }),
+          P.blague ? h("p", { class: "blague", text: "😄 " + P.blague }) : null);
+        var sb = sayBtn(function () { return [{ text: lu, lang: "fr-FR" }]; }); rep.appendChild(sb);
         fd.appendChild(rep);
-        if (TTS.auto) TTS.speak([{ text: P.phrase_oral, lang: "fr-FR" }], sb);
+        if (TTS.auto) TTS.speak([{ text: lu, lang: "fr-FR" }], sb);
         cb.suite();
       } else if (tries < 3) {
-        val = ""; upd(); journaliser(false, false);
+        val = ""; upd(); journaliser(false, false); premierCoup = false;
         fd.innerHTML = ""; fd.appendChild(h("div", { class: "feedback again", text: "Pas encore… Refais le calcul ! 💪" }));
+      } else if (si < steps.length - 1) {
+        premierCoup = false; journaliser(false, false); etapeSuivante(false);
       } else {
         fini = true; probNote(P.cas, false); journaliser(false, true);
-        fd.innerHTML = ""; fd.appendChild(h("div", { class: "feedback again", text: "Le résultat était " + c.reponse + ". " + P.phrase + " On le retravaillera ensemble ! 🌱" }));
+        fd.innerHTML = ""; fd.appendChild(h("div", { class: "feedback again", text: "Le résultat était " + fmtNb(S.reponse) + ". " + P.phrase + " On le retravaillera ensemble ! 🌱" }));
         cb.suite();
       }
     } });
@@ -924,6 +967,7 @@ function probleme(c, gauche, droite, cb) {
   }
   if (etat.guide) choisirSchema(); else choisirOp();
 }
+function fmtNb(x) { return String(x).replace(/\B(?=(\d{3})+(?!\d))/g, " "); }
 
 /* ------------------------------------------------------------ poésie tapée par le parent (texte jamais publié) */
 function poemeKey(b) { return "poeme:" + D.meta.id + ":" + b.id; }
@@ -1020,6 +1064,7 @@ function questionsRatees(all) {
 }
 /* un quiz transverse est une leçon assemblée : blocs, images et identifiants préfixés par la leçon d'origine */
 function assemblerQuiz(type, rates) {
+  genPerso();
   var t = quizType(type), pool = reservoirQuiz(type);
   var qs = [], gens = [];
   pool.forEach(function (l) {
@@ -1107,6 +1152,47 @@ function carteModeQuiz() {
       var n = nbQuestions(t.id), g = t.id === "francais" ? 0 : nbGenerateurs(t.id);
       return t.label + " : " + n + " question" + (n > 1 ? "s" : "") + (g ? " + calculs" : "");
     }).join(" · ") }));
+}
+
+/* ------------------------------------------------------------ rubrique Problèmes : séance de problèmes tirés au hasard,
+   un cas par stratégie (le tout, une partie, un partage, une comparaison, fois plus ou moins), plus 1 ou 2 problèmes à deux étapes */
+var PROB_N = 5;
+function problemesDispo() { return !!(window.GENERATEURS && window.GENERATEURS.G.probleme) && !reglagesProfil().prob_off; }
+function probLimite() { return reglagesProfil().prob_limite === 999 ? 999 : 9999; }
+function tirerCasProblemes() {
+  var cas = window.GENERATEURS.G.probleme.cas, parS = {};
+  cas.forEach(function (c) { var k = c.slice(0, 2); (parS[k] = parS[k] || []).push(c); });
+  var deux = parS.e2 || [], nb2 = Math.min(deux.length, Math.random() < 0.5 ? 1 : 2);
+  var un = shuffle(Object.keys(parS).filter(function (k) { return k !== "e2"; })).slice(0, PROB_N - nb2).map(function (k) { return pick(parS[k]); });
+  return shuffle(un.concat(shuffle(deux).slice(0, nb2)));
+}
+function pick(t) { return t[Math.floor(Math.random() * t.length)]; }
+function openProblemes() {
+  defiStop(); journal.fin();
+  var lim = probLimite();
+  chargerLecon({ _probs: true, meta: { id: "problemes", titre: "💡 Problèmes", matiere: "mathematiques" }, parcours: ["calculs"],
+    lecon: { blocs: [] }, images: [], styles: {}, calculs: [],
+    generateurs: tirerCasProblemes().map(function (c, i) { return { id: "p" + (i + 1), type: "probleme", nombre: 1, ref: [], params: { problemes: [c], limite: lim } }; }) });
+  state = { step: 0, done: {}, stars: 0 };
+  journal.debut(D, "problemes");
+  render();
+}
+function carteProblemes() {
+  var r = reglagesProfil(), lim = probLimite(), P = PERSO || {};
+  var perso = PERSO ? "Personnalisation chargée : " + [(P.amis || []).length + " copain" + ((P.amis || []).length > 1 ? "s" : ""), P.maitresse ? "la maîtresse" : null,
+    P.doudou ? "le doudou" : null, (P.parents || []).length ? "les parents" : null].filter(Boolean).join(", ") + "."
+    : "Pas de personnalisation : les énoncés utilisent des prénoms au hasard" + (r.prenom && !profils.actif().test ? " et le prénom " + r.prenom : "") + ".";
+  return h("div", { class: "card", id: "carte-problemes" }, h("div", { class: "label", text: "Problèmes (profil " + profils.actif().libelle + ")" }),
+    h("div", { class: "actions" },
+      h("button", { class: "btn" + (r.prob_off ? "" : " primary"), type: "button", id: "btn-prob-affiche", "aria-pressed": r.prob_off ? "false" : "true",
+        text: (r.prob_off ? "" : "✓ ") + "💡 Rubrique Problèmes sur l'accueil", onclick: function () { setReglagesProfil({ prob_off: !r.prob_off }); renderParent("Rubrique Problèmes " + (r.prob_off ? "affichée." : "masquée.")); } })),
+    h("div", { class: "label", text: "Nombres jusqu'à" }),
+    h("div", { class: "actions" }, [[999, "1 000"], [9999, "10 000"]].map(function (x) {
+      var on = lim === x[0];
+      return h("button", { class: "btn" + (on ? " primary" : ""), type: "button", "data-prob-limite": x[0], "aria-pressed": on ? "true" : "false", text: x[1],
+        onclick: function () { setReglagesProfil({ prob_limite: x[0] }); renderParent("Problèmes : nombres jusqu'à " + x[1] + "."); } });
+    })),
+    h("p", { class: "parentnote", id: "perso-etat", text: perso }));
 }
 
 /* ------------------------------------------------------------ défi chrono (maths) : 10 calculs, pavé + Entrée, record à battre */
@@ -1383,6 +1469,10 @@ function renderHome(info) {
       h("span", { class: "ic", "aria-hidden": "true", text: t.icon }),
       h("span", { class: "corps" }, h("span", { class: "titre", text: t.label }), h("span", { class: "sous", text: tailleQuiz(t.id) + " questions" })));
   })));
+  if (problemesDispo()) app.appendChild(h("div", { class: "raccourcis problemes" },
+    h("button", { class: "raccourci problemes", type: "button", id: "btn-problemes", onclick: function () { openProblemes(); } },
+      h("span", { class: "ic", "aria-hidden": "true", text: "💡" }),
+      h("span", { class: "corps" }, h("span", { class: "titre", text: "Problèmes" }), h("span", { class: "sous", text: PROB_N + " problèmes, à chaque fois des nouveaux" })))));
 
   var groupes = {};
   LESSONS.forEach(function (l) { var k = themeOf(l); (groupes[k] = groupes[k] || []).push(l); });
@@ -1475,19 +1565,20 @@ function genererBilan(all, pid, depuis) {
     /* calculs : chaque calcul manqué au premier essai (les nombres changent d'une séance à l'autre) */
     /* problèmes guidés : nature de l'erreur (schéma, opération, calcul) */
     var pbs = ev.filter(function (e) { return e.k === "calcul" && e.prob; });
-    function probOk(e) { return e.reussi && e.saisies.length === 1 && e.prob.schema !== false && e.prob.ops.length === 1; }
+    function nbE(e) { return e.prob.etapes || 1; }
+    function probOk(e) { return e.reussi && e.saisies.length === nbE(e) && e.prob.schema !== false && e.prob.ops.length === nbE(e); }
     pbs.filter(function (e) { return !probOk(e); }).slice(0, 8).forEach(function (e) {
       var d = [];
       if (e.prob.schema === false) d.push("schéma faux");
-      if (e.prob.ops.length > 1) d.push("opération : " + e.prob.ops.join(" puis "));
+      if (e.prob.ops.length > nbE(e)) d.push("opération : " + e.prob.ops.join(" puis "));
       if (!e.prob.ops.length) d.push("opération non choisie");
-      if (e.saisies.length && !(e.reussi && e.saisies.length === 1)) d.push("calcul : attendu " + e.attendu + ", saisi " + e.saisies.join(" puis ") + (e.reussi ? "" : " (non trouvé)"));
+      if (e.saisies.length && !(e.reussi && e.saisies.length === nbE(e))) d.push("calcul : attendu " + e.attendu + ", saisi " + e.saisies.join(" puis ") + (e.reussi ? "" : " (non trouvé)"));
       if (e.fini === false) d.push("problème quitté en cours");
-      pb.push("problème (" + e.prob.cas + (e.prob.guide ? ", avec schéma" : ", sans schéma") + ") " + guil(e.consigne) + " : " + d.join(" ; "));
+      pb.push("problème (" + e.prob.cas + (nbE(e) > 1 ? ", deux étapes" : e.prob.guide ? ", avec schéma" : ", sans schéma") + ") " + guil(e.consigne) + " : " + d.join(" ; "));
     });
     if (pbs.length) {
-      var nS = pbs.filter(function (e) { return e.prob.schema === false; }).length, nO = pbs.filter(function (e) { return e.prob.ops.length > 1; }).length;
-      var nC = pbs.filter(function (e) { return e.saisies.length > 1 || (e.fini && !e.reussi); }).length;
+      var nS = pbs.filter(function (e) { return e.prob.schema === false; }).length, nO = pbs.filter(function (e) { return e.prob.ops.length > nbE(e); }).length;
+      var nC = pbs.filter(function (e) { return e.saisies.length > nbE(e) || (e.fini && !e.reussi); }).length;
       var resume = "problèmes " + pbs.filter(probOk).length + "/" + pbs.length + " sans erreur";
       if (nS + nO + nC) pb.unshift(resume + " (erreurs : schéma " + nS + ", opération " + nO + ", calcul " + nC + ")"); else ok.push(resume);
     }
@@ -1656,6 +1747,7 @@ function renderParent(msg) {
     h("p", { class: "parentnote", text: "Le profil test garde sa propre progression. L'appli revient au profil Enfant à chaque lancement." })));
   app.appendChild(carteBilan(out));
   app.appendChild(carteModeQuiz());
+  app.appendChild(carteProblemes());
   var taille = reglages().taille || "moyenne";
   app.appendChild(h("div", { class: "card" }, h("div", { class: "label", text: "Taille du texte" }),
     h("div", { class: "actions" }, ["petite", "moyenne", "grande"].map(function (k) {

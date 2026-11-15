@@ -1,0 +1,31 @@
+{
+ "enfant": [
+  "Inès",
+  "f"
+ ],
+ "amis": [
+  [
+   "Anna",
+   "f"
+  ],
+  [
+   "Elio",
+   "m"
+  ]
+ ],
+ "maitresse": "Madame Olive",
+ "doudou": [
+  "Doudou Ours",
+  "m"
+ ],
+ "parents": [
+  [
+   "Papa",
+   "m"
+  ],
+  [
+   "Maman",
+   "f"
+  ]
+ ]
+}

@@ -456,14 +456,12 @@
                 ]
               },
               "strategies": {
-                "description": "probleme : stratégies tirées (1 le tout, 2 une partie, 3 un partage, 4 une comparaison, 5 fois plus ou fois moins)",
+                "description": "probleme : stratégies tirées (1 le tout, 2 une partie, 3 un partage, 4 une comparaison, 5 fois plus ou fois moins, 9 problèmes à deux étapes)",
                 "type": "array",
                 "minItems": 1,
                 "uniqueItems": true,
                 "items": {
-                  "type": "integer",
-                  "minimum": 1,
-                  "maximum": 5
+                  "enum": [1, 2, 3, 4, 5, 9]
                 }
               },
               "problemes": {
@@ -474,6 +472,8 @@
                 "items": {
                   "enum": [
                     "s1_parties",
+                    "s1_trois",
+                    "s1_perimetre",
                     "s1_egales",
                     "s2_complement",
                     "s2_perte",
@@ -484,7 +484,12 @@
                     "s4_petite",
                     "s4_ecart",
                     "s5_fois_plus",
-                    "s5_fois_moins"
+                    "s5_fois_moins",
+                    "e2_gagne_donne",
+                    "e2_depenses",
+                    "e2_groupes_fois",
+                    "e2_groupes_plus",
+                    "e2_total_partage"
                   ]
                 }
               },

@@ -237,6 +237,27 @@ Plus tard, chacune dans son propre lot : stratégie 6 (demi-droite du temps, ré
 
 ---
 
+## Lot 6 : rubrique Problèmes, deux étapes, personnalisation [DEMANDÉ 15/11/2026] · LIVRÉ en 1.10.0 (15/11/2026)
+
+**Besoin.** Le parent a fourni des exemples de problèmes du cahier de l'enfant (réunion de 3 quantités, groupes égaux, ce qui manque, périmètre d'un carré, aller-retour pour 2 personnes, budget avec plusieurs dépenses, récolte puis utilisation, grand partage). Il veut des problèmes générés au hasard, variés, accessibles par une seule rubrique, personnalisés avec la vie de l'enfant (maîtresse, copines, doudou, piscine), avec des petites blagues. Représentation de la classe : schéma en barres. Aucun exemple du cahier n'est repris : contextes et nombres originaux.
+
+**Livré.**
+- **Rubrique « 💡 Problèmes » sur l'accueil** : 5 problèmes par séance, un cas par stratégie tirée au hasard, plus 1 ou 2 problèmes à deux étapes. « Recommencer » tire de nouveaux cas. Pas de progression de leçon ; journal de type `problemes`, bilan sous `[problemes]`.
+- **Nouveaux cas** (19 au total) : `s1_trois` (3 parties, schéma à 3 cases ; mauvais schémas : une partie oubliée, l'écart), `s1_perimetre` (tour d'un carré, 4 × côté ; mauvais schémas : 2 côtés, 4 + côté), grands partages dans `s3_part` (diviseur 2, 4, 5 ou 10, quotient multiple de 5), et 5 cas à deux étapes : `e2_gagne_donne` (a + b − c), `e2_depenses` (B − (a + b)), `e2_groupes_fois` ((x × y) × z, dont l'aller-retour à deux), `e2_groupes_plus` (n × k + e), `e2_total_partage` ((a + b) ÷ k, dans les tables). 4 contextes ou plus par cas.
+- **Deux étapes** : pas d'étape schéma ; « D'abord… » (question intermédiaire), opération, calcul ; puis « Ensuite… » ; l'étape faite reste affichée (« ✓ 281 + 161 = 442 g »). Après 3 essais, le résultat intermédiaire est donné et on continue.
+- **Personnalisation chiffrée** `lecons/perso.json` (`outils/perso.py`), déclarée dans `index.json` (clé `perso`) : prénoms de l'enfant et des copains (genre pour les accords), maîtresse, doudou, parents. Sans elle : prénoms génériques, et le prénom du profil enfant. Élisions automatiques (« d'Inès », « qu'elle ») ; corrige au passage « que elle » dans un contexte existant.
+- **Blagues** facultatives par contexte, affichées et lues après la phrase réponse.
+- **Zone parent, carte « Problèmes »** : rubrique affichée ou masquée, nombres jusqu'à 1 000 ou 10 000 (défaut), état de la personnalisation.
+- Unités g et dm lues en toutes lettres.
+
+**Tests.** `test_generateurs.py` : 1 000 tirages par cas, avec et sans personnalisation, limites 999 et 9 999 (76 000 problèmes) ; étapes recalculées et chaînées, divisions exactes, élisions, personnalisation absente quand elle n'est pas chargée. `test_rubrique_problemes.py` : 6 séances jouées, deux étapes, 4 opérations, personnalisation utilisée, bilan, réglages. Non-régression : `test_app`, `test_quiz`, `test_defi`, `test_problemes` verts.
+
+**À vérifier sur la tablette.** Lisibilité des schémas à 3 cases ; lecture à voix haute des questions « D'abord / Ensuite ».
+
+**En attente.** Les réponses du parent au questionnaire de personnalisation, pour écrire `perso.json` et ajouter des contextes tirés de la vie de l'enfant (activités, goûts, lieux).
+
+---
+
 ## Idées non arbitrées [PROPOSÉ]
 
 À ne pas coder sans accord du parent.

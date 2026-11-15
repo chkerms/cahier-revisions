@@ -12,6 +12,8 @@ Mode quiz, activé par le parent dans la Zone parent (par profil) : « Quiz fran
 
 Défi chrono sur chaque leçon de maths : 10 calculs le plus vite possible, réponse au pavé puis « ↵ Entrée » (un clavier ou un pavé numérique branché marche aussi), +5 secondes par erreur, record à battre par leçon et par profil.
 
+Rubrique « Problèmes » sur l'accueil : 5 problèmes tirés au hasard à chaque séance (le tout, une partie, un partage, une comparaison, fois plus ou fois moins, et des problèmes à deux étapes), avec le schéma en barres, le choix de l'opération et la phrase réponse. Les énoncés peuvent être personnalisés (prénoms, maîtresse, doudou) grâce à `lecons/perso.json`, chiffré comme les leçons (`outils/perso.py`).
+
 Le contenu des leçons est chiffré (RSA-OAEP + AES-GCM). Le code est public, les leçons ne le sont pas : elles ne s'ouvrent qu'avec le mot de passe du cahier.
 
 - `index.html`, `app.js`, `sw.js` : l'application (sans dépendance externe)
