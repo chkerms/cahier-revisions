@@ -26,7 +26,16 @@ DUREE_MAX = 10 * 60
 # thèmes de l'accueil, par matière (même liste que THEMES dans app.js)
 THEMES = {"francais": ["grammaire", "conjugaison", "dictee", "vocabulaire", "poesie"],
           "mathematiques": ["nombres", "fractions", "operations", "calcul_mental", "mesures", "heure", "geometrie",
-                            "monnaie", "problemes", "donnees"]}
+                            "monnaie", "problemes", "donnees"],
+          "questionner_le_monde": ["astres", "monde", "lieux"]}
+CARTES_JS = Path(__file__).resolve().parent.parent / "cartes.js"
+GEO_PAR_QUESTION = 10  # secondes par lieu à toucher ou à nommer (hypothèse à recaler)
+
+
+def cartes():
+    """Fonds publics (cartes.js) : zones du monde et cadre de la France."""
+    s = CARTES_JS.read_text(encoding="utf-8")
+    return json.loads(s[s.index("{"):s.rindex("}") + 1])
 
 
 # ---------------------------------------------------------------- balisage
@@ -103,6 +112,20 @@ def rich_fields(d):
             yield f"{p}/evenements/{j}", ev["libelle"]
         for j, lg in enumerate(b.get("legendes", [])):
             yield f"{p}/legendes/{j}", lg["libelle"]
+        if b["type"] == "carte" and "titre" in b:
+            yield f"{p}/titre", b["titre"]
+        if "legende" in b:
+            yield f"{p}/legende", b["legende"]
+        for j, r in enumerate(b.get("reperes", [])):
+            yield f"{p}/reperes/{j}/nom", r["nom"]
+            if "info" in r:
+                yield f"{p}/reperes/{j}/info", r["info"]
+    for i, c in enumerate(d.get("carte", {}).get("cibles", [])):
+        yield f"carte/cibles/{i}/nom", c["nom"]
+        if "info" in c:
+            yield f"carte/cibles/{i}/info", c["info"]
+    if "question_nommer" in d.get("carte", {}):
+        yield "carte/question_nommer", d["carte"]["question_nommer"]
     for i, c in enumerate(d.get("cartes", [])):
         yield f"cartes/{i}/recto", txt(c["recto"])
         yield f"cartes/{i}/verso", txt(c["verso"])
@@ -132,6 +155,8 @@ def lesson_corpus(d):
         parts += [v for st in b.get("strophes", []) for v in st]
         parts += [f"{e['repere']} {e['libelle']}" for e in b.get("evenements", [])]
         parts += [lg["libelle"] for lg in b.get("legendes", [])]
+        parts += ([b["legende"]] if "legende" in b else [])
+        parts += [x for r in b.get("reperes", []) for x in (r["nom"], r.get("info"))if x]
         parts += b.get("termes", []) + ([b["resultat"]] if "resultat" in b else [])
     flat = [norm(parse_markup(p)[0]) for p in parts]
     # variante où les fractions sont éclatées, pour qu'un numérateur ou dénominateur isolé soit reconnu
@@ -233,7 +258,57 @@ def check_svg(svg):
 # ---------------------------------------------------------------- validation
 BLOC_DEFS = {"titre": "b_titre", "paragraphe": "b_paragraphe", "definition": "b_definition", "regle": "b_regle",
              "remarque": "b_remarque", "exemples": "b_exemples", "liste": "b_liste", "tableau": "b_tableau",
-             "operation_posee": "b_operation", "poeme": "b_poeme", "frise": "b_frise", "schema_legende": "b_schema"}
+             "operation_posee": "b_operation", "poeme": "b_poeme", "frise": "b_frise", "schema_legende": "b_schema",
+             "animation": "b_animation", "carte": "b_carte"}
+
+
+def check_lieux(fond, lieux, path, images, C):
+    """Chaque lieu doit exister sur son fond (zone connue, point dans le cadre)."""
+    pbs, used = [], set()
+    if fond == "monde":
+        m = C["monde"]
+        connues = set(m["zones"]) | set(m["parts"]) | {k[3:] for k in m["parts"] if k.startswith("oc_")}
+        for i, l in enumerate(lieux):
+            if "zone" not in l:
+                pbs.append(f"{path}/{i} « {l['nom']} » : sur le fond monde, donner une zone ({', '.join(sorted(connues))})")
+            elif l["zone"] not in connues:
+                pbs.append(f"{path}/{i} : zone « {l['zone']} » inconnue du fond monde ({', '.join(sorted(connues))})")
+    elif fond == "france":
+        pr, vb = C["france"]["proj"], C["france"]["vb"]
+        for i, l in enumerate(lieux):
+            if "lat" not in l or "lon" not in l:
+                pbs.append(f"{path}/{i} « {l['nom']} » : sur le fond france, donner lat et lon")
+                continue
+            x, y = (l["lon"] - pr["lon0"]) * pr["c"] * pr["k"], (pr["lat1"] - l["lat"]) * pr["k"]
+            if not (0 <= x <= vb[2] and 0 <= y <= vb[3]):
+                pbs.append(f"{path}/{i} « {l['nom']} » : hors de la carte de France")
+    else:
+        used.add(fond)
+        im = images.get(fond)
+        if not im or "svg" not in im:
+            return [f"{path} : fond « {fond} » absent des images (SVG attendu)"], used
+        try:
+            root = ET.fromstring(im["svg"])
+        except ET.ParseError:
+            return [], used
+        ids = {el.attrib["id"] for el in root.iter() if "id" in el.attrib}
+        try:
+            vb = [float(v) for v in root.attrib.get("viewBox", "0 0 0 0").replace(",", " ").split()]
+        except ValueError:
+            vb = [0, 0, 0, 0]
+        for i, l in enumerate(lieux):
+            if "zone" in l:
+                if l["zone"] not in ids:
+                    pbs.append(f"{path}/{i} : zone « {l['zone']} » absente du SVG {fond}")
+            elif "x" in l and "y" in l:
+                if not (vb[0] <= l["x"] <= vb[0] + vb[2] and vb[1] <= l["y"] <= vb[1] + vb[3]):
+                    pbs.append(f"{path}/{i} « {l['nom']} » : point hors du viewBox de {fond}")
+            else:
+                pbs.append(f"{path}/{i} « {l['nom']} » : donner une zone (id du SVG) ou x et y")
+    for i, l in enumerate(lieux):
+        if sum(k in l for k in ("zone", "lat", "x")) > 1:
+            pbs.append(f"{path}/{i} « {l['nom']} » : une seule façon de placer le lieu (zone, lat/lon ou x/y)")
+    return pbs, used
 
 
 def short(e):
@@ -286,6 +361,8 @@ def validate(d):
             E("meta/theme", f"« {th} » n'est pas un thème de {mat} ({', '.join(THEMES[mat])})")
     elif th:
         E("meta/theme", f"pas de thème pour la matière {mat}")
+    if th in THEMES["questionner_le_monde"] and d["meta"].get("methode") in ("MHM", "MHF"):
+        W("meta/methode", "MHM et MHF ne couvrent pas Questionner le monde : « autre » ou « aucune »")
 
     blocs = {b["id"]: b for b in d["lecon"]["blocs"]}
     pages = {s["id"] for s in d["meta"].get("sources", [])}
@@ -341,6 +418,27 @@ def validate(d):
             schemas = [blocs[r]["image"] for r in it["ref"] if r in blocs and blocs[r]["type"] == "schema_legende"]
             if schemas and "image" not in it:
                 E(f"{coll} {it['id']}", f"s'appuie sur un schéma (ref) mais n'affiche pas l'image : ajouter \"image\": \"{schemas[0]}\"")
+    # cartes : lieux placés sur leur fond
+    geo = [(f"bloc {b['id']}/reperes", b["fond"], b["reperes"]) for b in d["lecon"]["blocs"] if b["type"] == "carte"]
+    if "carte" in d:
+        geo.append(("carte/cibles", d["carte"]["fond"], d["carte"]["cibles"]))
+    if geo:
+        try:
+            C = cartes()
+        except (OSError, ValueError):
+            C = None
+            E("carte", "cartes.js introuvable ou illisible : lancer outils/cartes_build.py")
+        for path, fond, lieux in geo if C else []:
+            pbs, u = check_lieux(fond, lieux, path, images, C)
+            used_images |= u
+            for pb in pbs:
+                E(path.split("/")[0], pb)
+    if "carte" in d:
+        noms = [norm(parse_markup(c["nom"])[0]) for c in d["carte"]["cibles"]]
+        if len(set(noms)) < len(noms):
+            E("carte/cibles", "deux lieux ont le même nom : impossible de les distinguer")
+        if "carte" not in d["parcours"]:
+            W("carte", "étape carte absente du parcours : elle ne sera pas proposée")
     for im in images:
         if im not in used_images:
             W(f"image {im}", "déclarée mais non utilisée")
@@ -457,7 +555,14 @@ def duree_s(d):
     return (len(d["lecon"]["blocs"]) * DUREES["bloc"] + len(d.get("cartes", [])) * DUREES["carte"]
             + (len(d.get("calculs", [])) + sum(g["nombre"] for g in d.get("generateurs", []))) * DUREES["calcul"]
             + len(d.get("quiz", [])) * DUREES["quiz"] + len(d.get("oral", [])) * DUREES["oral"]
-            + (vers * DUREES["vers"] * 3 if "recitation" in d["parcours"] else 0))
+            + (vers * DUREES["vers"] * 3 if "recitation" in d["parcours"] else 0)
+            + (duree_carte(d["carte"]) if "carte" in d and "carte" in d["parcours"] else 0))
+
+
+def duree_carte(c):
+    n = len(c["cibles"])
+    modes = c.get("modes", ["trouver", "nommer"])
+    return GEO_PAR_QUESTION * ((n if "trouver" in modes else 0) + (min(4, n) if "nommer" in modes else 0))
 
 
 def main():

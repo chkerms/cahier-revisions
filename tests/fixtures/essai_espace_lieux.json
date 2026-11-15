@@ -1,0 +1,119 @@
+{
+ "schema_version": "2.0",
+ "meta": {
+  "id": "essai-espace-lieux",
+  "titre": "Essai : lieux sur une carte",
+  "date": "2026-11-15",
+  "methode": "aucune",
+  "matiere": "questionner_le_monde",
+  "domaine": "questionner l'espace",
+  "theme": "lieux",
+  "type_lecon": "notion",
+  "niveau": "CE2",
+  "complete": true,
+  "statut": "pret"
+ },
+ "styles": {},
+ "images": [
+  {
+   "id": "img1",
+   "svg": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 1000 800\"><rect width=\"1000\" height=\"800\" fill=\"#e3e3e3\"/><path id=\"z-lac\" data-lx=\"200\" data-ly=\"200\" d=\"M80 80H320V320H80Z\" fill=\"#9cf\"/><path id=\"z-foret\" data-lx=\"750\" data-ly=\"200\" d=\"M620 80H900V320H620Z\" fill=\"#9c9\"/><path id=\"z-champ\" data-lx=\"250\" data-ly=\"600\" d=\"M80 480H420V720H80Z\" fill=\"#fc9\"/></svg>",
+   "description": "Plan d'essai : un lac, une forêt, un champ et un phare."
+  }
+ ],
+ "lecon": {
+  "blocs": [
+   {
+    "id": "b1",
+    "type": "titre",
+    "texte": "Essai : lieux sur une carte"
+   },
+   {
+    "id": "b2",
+    "type": "carte",
+    "fond": "france",
+    "titre": "Trois villes",
+    "rose": true,
+    "reperes": [
+     {
+      "nom": "Paris",
+      "lat": 48.8566,
+      "lon": 2.3522
+     },
+     {
+      "nom": "Lyon",
+      "lat": 45.764,
+      "lon": 4.8357
+     },
+     {
+      "nom": "Brest",
+      "lat": 48.3904,
+      "lon": -4.4861
+     }
+    ]
+   },
+   {
+    "id": "b3",
+    "type": "carte",
+    "fond": "img1",
+    "titre": "Le plan",
+    "rose": true,
+    "reperes": [
+     {
+      "nom": "Le lac",
+      "zone": "z-lac"
+     },
+     {
+      "nom": "La forêt",
+      "zone": "z-foret"
+     },
+     {
+      "nom": "Le champ",
+      "zone": "z-champ"
+     },
+     {
+      "nom": "Le phare",
+      "x": 760,
+      "y": 600
+     }
+    ]
+   }
+  ]
+ },
+ "carte": {
+  "fond": "img1",
+  "rose": true,
+  "modes": [
+   "trouver",
+   "nommer"
+  ],
+  "cibles": [
+   {
+    "id": "g1",
+    "nom": "Le lac",
+    "zone": "z-lac"
+   },
+   {
+    "id": "g2",
+    "nom": "La forêt",
+    "zone": "z-foret"
+   },
+   {
+    "id": "g3",
+    "nom": "Le champ",
+    "zone": "z-champ"
+   },
+   {
+    "id": "g4",
+    "nom": "Le phare",
+    "x": 760,
+    "y": 600,
+    "info": "Il éclaire la mer."
+   }
+  ]
+ },
+ "parcours": [
+  "lecon",
+  "carte"
+ ]
+}

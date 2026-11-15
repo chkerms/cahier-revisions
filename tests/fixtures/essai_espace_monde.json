@@ -1,0 +1,108 @@
+{
+ "schema_version": "2.0",
+ "meta": {
+  "id": "essai-espace-monde",
+  "titre": "Essai : astres et continents",
+  "date": "2026-11-15",
+  "methode": "aucune",
+  "matiere": "questionner_le_monde",
+  "domaine": "questionner l'espace",
+  "theme": "monde",
+  "type_lecon": "notion",
+  "niveau": "CE2",
+  "complete": true,
+  "statut": "pret"
+ },
+ "styles": {},
+ "lecon": {
+  "blocs": [
+   {
+    "id": "b1",
+    "type": "titre",
+    "texte": "Essai : astres et continents"
+   },
+   {
+    "id": "b2",
+    "type": "animation",
+    "modele": "systeme_solaire",
+    "legende": "Les planètes tournent autour du Soleil."
+   },
+   {
+    "id": "b3",
+    "type": "animation",
+    "modele": "jour_nuit",
+    "legende": "La Terre tourne sur elle-même."
+   },
+   {
+    "id": "b4",
+    "type": "animation",
+    "modele": "annee",
+    "legende": "La Terre tourne autour du Soleil."
+   },
+   {
+    "id": "b5",
+    "type": "animation",
+    "modele": "lune",
+    "legende": "La Lune tourne autour de la Terre."
+   },
+   {
+    "id": "b6",
+    "type": "carte",
+    "fond": "monde",
+    "titre": "Quelques continents",
+    "reperes": [
+     {
+      "nom": "Afrique",
+      "zone": "afrique"
+     },
+     {
+      "nom": "Amérique",
+      "zone": "amerique"
+     },
+     {
+      "nom": "Asie",
+      "zone": "asie"
+     },
+     {
+      "nom": "Europe",
+      "zone": "europe"
+     },
+     {
+      "nom": "Océan Atlantique",
+      "zone": "atlantique"
+     }
+    ]
+   }
+  ]
+ },
+ "carte": {
+  "fond": "monde",
+  "cibles": [
+   {
+    "id": "g1",
+    "nom": "Afrique",
+    "zone": "afrique"
+   },
+   {
+    "id": "g2",
+    "nom": "Asie",
+    "zone": "asie"
+   },
+   {
+    "id": "g3",
+    "nom": "Europe",
+    "zone": "europe",
+    "info": "Le continent de la France."
+   },
+   {
+    "id": "g4",
+    "nom": "Océan Atlantique",
+    "zone": "atlantique"
+   }
+  ]
+ },
+ "parcours": [
+  "lecon",
+  "carte"
+ ]
+}

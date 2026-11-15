@@ -264,11 +264,64 @@ h2.matiere{font-size:1.15rem;margin:1.4rem 0 .6rem;color:var(--muted)}
 .ouinon-btn:disabled:not(.right):not(.tried){opacity:.45}
 .bandeau-test{position:sticky;top:0;z-index:30;background:#FFE08A;color:#5B3B00;font-weight:700;text-align:center;padding:.45rem .8rem;font-size:.9rem;border-bottom:3px solid #E0A800}
 body.profil-test .wrap{outline:4px dashed #E0A800;outline-offset:-4px}
+
+/* Questionner l'espace : cartes et animations */
+.geo-wrap{padding:.5rem}
+.geo-wrap svg.geo{display:block;width:100%;height:auto;max-height:72vh;border-radius:14px;user-select:none;-webkit-user-select:none}
+svg.geo .geo-eau{fill:#BFE3F7;stroke:none}
+svg.geo .geo-terre{fill:#F3E6C4;stroke:#8C7B5A;stroke-width:.6}
+svg.geo.france .geo-terre{fill:#FFF3D6;stroke:#6B5B3E;stroke-width:1.6}
+svg.geo .geo-voisin{fill:#E4E4E4;stroke:#A0A0A0;stroke-width:1}
+svg.geo .geo-limite{fill:none;stroke:#B0408A;stroke-width:1.2;stroke-dasharray:5 4}
+svg.geo .geo-fond-txt{font-size:22px;font-style:italic;text-anchor:middle;fill:#777;pointer-events:none}
+svg.geo .geo-fond-txt.mer{fill:#2C6CB0}
+svg.geo .geo-label{font-weight:700;text-anchor:middle;fill:#1F2A44;stroke:#fff;stroke-width:5px;paint-order:stroke;stroke-linejoin:round;pointer-events:none}
+svg.geo .geo-label.eau{fill:#0D4C8C;font-style:italic}
+svg.geo .geo-label.nouveau{animation:pop .5s ease}
+svg.geo .geo-point{fill:#E53935;stroke:#fff;stroke-width:3}
+svg.geo .geo-rose path{fill:#1F2A44}
+svg.geo .geo-rose-fond{fill:#fff;opacity:.85}
+svg.geo .geo-rose-txt{font-weight:700;text-anchor:middle;fill:#1F2A44}
+.jeu svg.geo .geo-cible{fill:#FFD27A;stroke:#8A5A00;stroke-width:1.5;cursor:pointer}
+.jeu svg.geo.monde .geo-eau.geo-cible{fill:#9CCDF0;stroke:#4C8CC0;stroke-width:1}
+.jeu svg.geo .geo-point{cursor:pointer}
+.jeu svg.geo .geo-ok{fill:#7ED49B!important;stroke:#1E8E50}
+.jeu svg.geo .geo-point.geo-ok{fill:#1E8E50!important;stroke:#fff}
+.jeu svg.geo .geo-faux{fill:#F28B82!important}
+.jeu svg.geo .geo-montre{fill:#FF7043!important;stroke:#BF360C;stroke-width:3;animation:geoclignote 1s ease-in-out infinite}
+@keyframes geoclignote{50%{opacity:.45}}
+.geo-q .q{font-size:1.15rem}
+.geo-fb .feedback{margin:.5rem 0 0}
+svg.anim{display:block;width:100%;height:auto;background:#0E1A3A;border-radius:16px}
+svg.anim .orbite{fill:none;stroke:#5C6B99;stroke-width:1.5;stroke-dasharray:4 5}
+svg.anim .orbite.terre{stroke:#7FB6EE;stroke-width:2.5}
+svg.anim .astre-soleil .corps{fill:#FFC93C}
+svg.anim .astre-soleil .rayon{stroke:#FFC93C;stroke-width:5;stroke-linecap:round}
+svg.anim .astre-txt{fill:#fff;font-size:22px;text-anchor:middle;font-weight:700;font-family:"Andika",sans-serif}
+svg.anim .astre-txt.petit{font-size:16px}
+svg.anim .astre-txt.mois{font-size:17px;fill:#C9D6F5;font-weight:400}
+svg.anim .astre-txt.fonce{fill:#5A3A00}
+svg.anim .anneau{fill:none;stroke:#E3CF8E;stroke-width:3}
+svg.anim .planete.terre circle:first-of-type{stroke:#fff;stroke-width:2}
+svg.anim .lune-mini{fill:#ddd}
+svg.anim .lumiere{stroke:#FFE58A;stroke-width:3;stroke-dasharray:10 8;opacity:.7}
+svg.anim .ocean,svg.anim .terre-p{fill:#3C8DDB}
+svg.anim .continent{fill:#5DBB63}
+svg.anim .moi{fill:#E53935;stroke:#fff;stroke-width:4}
+svg.anim .nuit{fill:#000;opacity:.55}
+svg.anim .pole{fill:#fff}
+svg.anim .lune-sombre{fill:#3A3F55}
+svg.anim .lune-sombre.vue{stroke:#596080;stroke-width:2}
+svg.anim .lune-claire{fill:#F2F2E8}
+svg.anim .encart{fill:#1B2A55;stroke:#5C6B99;stroke-width:2}
+.anim-cap{font-weight:700;margin:.6rem 0 .2rem;min-height:3em}
+.anim-actions{margin-top:.2rem}
 </style>
 </head>
 <body>
 <div class="wrap" id="app"></div>
 <div class="next" id="next" hidden></div>
+<script src="cartes.js"></script>
 <script src="generateurs.js"></script>
 <script src="app.js"></script>
 </body>

@@ -278,6 +278,28 @@ Plus tard, chacune dans son propre lot : stratégie 6 (demi-droite du temps, ré
 
 ---
 
+## Lot 8 : rubrique « Questionner l'espace » [DEMANDÉ 15/11/2026] · LIVRÉ en 1.12.0 (15/11/2026)
+
+**Besoin.** Ajouter de la géographie et les astres, en lien avec le programme de CE2 (Questionner l'espace et le temps, programme de 2020 encore en vigueur en CE2 en 2026-2027) : la Terre et les astres avec des animations ; continents et océans ; grandes villes françaises ; lieux familiers de l'enfant à placer sur une carte.
+
+**Livré.**
+- **Accueil** : rubrique « Questionner l'espace » (matière `questionner_le_monde`), thèmes `astres` (☀️ La Terre et les astres), `monde` (🌍 Continents et océans), `lieux` (📍 Villes et lieux). Les thèmes peuvent porter une rubrique : le titre de section vient de la rubrique, sinon de la matière. Zone parent, carte « Programme » : la rubrique est listée.
+- **Bloc `animation`**, dessiné par l'appli (SVG + `requestAnimationFrame`, bouton pause, arrêt quand l'écran change, à l'arrêt si l'appareil demande moins d'animations) : `systeme_solaire` (8 planètes nommées, la Lune autour de la Terre), `jour_nuit` (Terre vue du pôle Nord, point rouge = l'enfant, heure qui défile, jour ou nuit), `annee` (tour du Soleil, mois et jour sur 365), `lune` (Lune éclairée par le Soleil, encart « depuis la Terre, je vois », phases). Pas à l'échelle.
+- **Fonds de carte** `cartes.js` (133 Ko, en cache hors ligne), générés par `outils/cartes_build.py` : planisphère en projection Natural Earth (continents, avec Amérique du Nord et du Sud séparables ; océans découpés par des limites conventionnelles simplifiées) et France métropolitaine (régions, pays voisins, mers, projection pour placer une ville par latitude et longitude).
+- **Fond local** : `outils/fond_local.py` fabrique un SVG (départements, pays voisin, une zone par commune) à mettre dans la leçon chiffrée ; il refuse d'écrire dans le dépôt. L'appli nettoie le SVG avant de l'insérer (scripts, liens, attributs `on…`).
+- **Bloc `carte`** : repères coloriés et nommés, étiquettes gardées dans le cadre, rose des vents en option.
+- **Étape « 🗺️ Sur la carte »** (`carte`) : « Touche sur la carte : … » (zone, ou point avec une tolérance au doigt), puis « Quel est ce continent / cet océan / ce lieu ? » (3 boutons, lieu qui clignote, aucune étiquette). Erreur : le lieu touché est nommé (« Non, ça, c'est l'Asie ») ; au 3e essai raté, le bon lieu est montré. Étoile au premier coup, étiquette gagnée qui reste sur la carte, phrase `info` facultative.
+- **Journal** : événement `geo` (lieu, mode, erreurs, lieux confondus, résolu) ; **bilan** : « carte g2 « Asie » (le toucher) : raté du premier coup… (confondu avec : …) », et « carte x/y du premier coup ».
+- Schéma (`b_animation`, `b_carte`, `lieu`, `fond`, objet `carte`), validateur (zones connues, ville dans le cadre, zone présente dans le SVG, noms distincts, durée 10 s par lieu).
+
+**Tests.** `tests/test_espace.py` (2 leçons d'essai génériques, sans rien de personnel : `essai_espace_monde.json`, `essai_espace_lieux.json`) : rubrique, 4 animations qui bougent et se mettent en pause, repères, zones touchées (juste, faux, hors cible), lieu montré après 3 erreurs, étoiles, nommer, point touché à côté, journal, bilan, programme. Non-régression : `test_validate`, `test_emojis`, `test_generateurs`, `test_app`, `test_quiz`, `test_defi`, `test_problemes`, `test_rubrique_problemes` verts.
+
+**À vérifier sur la tablette.** Précision du doigt sur les petites zones (Europe, une petite commune), fluidité des animations sur l'ancienne tablette, lecture à voix haute des noms de lieux.
+
+**[À ARBITRER]** Continents : les leçons comptent 6 continents avec une seule Amérique (Amérique du Nord et du Sud citées comme ses deux parties). Si la classe en compte 7, les zones `amerique_nord` et `amerique_sud` existent déjà : il suffit de republier la leçon.
+
+---
+
 ## Idées non arbitrées [PROPOSÉ]
 
 À ne pas coder sans accord du parent.

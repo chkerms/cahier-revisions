@@ -1,7 +1,7 @@
 /* Cahier de révisions : lecteur de leçons chiffrées. Aucune dépendance externe. */
 "use strict";
 (function () {
-var VERSION = "1.11.0";
+var VERSION = "1.12.0";
 var app = document.getElementById("app");
 var nextBar = document.getElementById("next");
 var D = null, IMG = {}, LESSONS = [], VUE = null, CTX = null, PERSO = null; /* CTX : leçon d'origine de la question affichée (quiz transverse) */
@@ -362,6 +362,8 @@ function blocOral(b) {
       S.push({ text: b.titre + (b.auteur ? ", de " + b.auteur : "") + ".", lang: "fr-FR" });
       (b.strophes || []).forEach(function (st) { S.push({ text: st.join(", "), lang: "fr-FR" }); }); break;
     case "frise": b.evenements.forEach(function (e) { r(e.repere + " : " + e.libelle + "."); }); break;
+    case "animation": if (b.legende) r(b.legende); break;
+    case "carte": r((b.titre ? b.titre : "Sur la carte") + " : " + b.reperes.map(function (l) { return plain(l.nom); }).join(", ") + "."); break;
     case "schema_legende":
       var im = (D.images || []).filter(function (x) { return x.id === b.image; })[0];
       if (im) S.push({ text: im.description, lang: "fr-FR" });
@@ -427,6 +429,10 @@ function renderBloc(b, opts) {
     case "frise":
       body = h("ul", { class: "frise" }, b.evenements.map(function (e) {
         return h("li", null, h("span", { class: "rep", text: e.repere }), rich(e.libelle)); })); break;
+    case "animation": label = "🎬 Regarde"; cls += " anim-bloc";
+      body = blocAnimation(b).concat(b.legende ? [h("p", null, rich(b.legende))] : []); break;
+    case "carte": label = "🗺️ " + (b.titre ? plain(b.titre) : "Carte"); cls += " geo-bloc";
+      body = blocCarte(b); break;
     case "schema_legende": cls += " schema";
       var im = (D.images || []).filter(function (x) { return x.id === b.image; })[0];
       body = [IMG[b.image] ? h("img", { src: IMG[b.image], alt: im ? im.description : "" }) : null,
@@ -449,7 +455,7 @@ function itemImg(it) {
 var STEP_META = {
   lecon: { icon: "📖", label: "Ma leçon" }, cartes: { icon: "🔄", label: "Cartes" },
   quiz: { icon: "🎯", label: "Quiz" }, calculs: { icon: "➕", label: "Calculs" }, recitation: { icon: "🎤", label: "Récitation" },
-  oral: { icon: "🗣️", label: "Interro" }
+  oral: { icon: "🗣️", label: "Interro" }, carte: { icon: "🗺️", label: "Sur la carte" }
 };
 var state = { step: 0, done: {}, stars: 0 };
 var starsEl;
@@ -505,7 +511,7 @@ function render() {
   var main = shell(), s = D.parcours[state.step];
   window.scrollTo(0, 0);
   journal.etape("vues", s);
-  ({ lecon: stepLecon, cartes: stepCartes, quiz: stepQuiz, calculs: stepCalculs, recitation: stepRecitation, oral: stepOral })[s](main);
+  ({ lecon: stepLecon, cartes: stepCartes, quiz: stepQuiz, calculs: stepCalculs, recitation: stepRecitation, oral: stepOral, carte: stepCarte })[s](main);
 }
 
 /* ------------------------------------------------------------ 1. leçon */
@@ -719,6 +725,395 @@ function stepOral(main) {
     if (TTS.auto) TTS.speak(segOf(o.question), qsay);
   }
   show();
+}
+
+/* ------------------------------------------------------------ Questionner l'espace : fonds de carte, lieux */
+/* Fonds publics dans cartes.js (monde, france) ; un fond local (personnel) est un SVG de la leçon chiffrée. */
+var SVGNS = "http://www.w3.org/2000/svg";
+function sv(tag, attrs) {
+  var el = document.createElementNS(SVGNS, tag), k, i;
+  if (attrs) for (k in attrs) if (attrs[k] != null) el.setAttribute(k, attrs[k]);
+  for (i = 2; i < arguments.length; i++) add(el, arguments[i]);
+  return el;
+}
+var GEO_COUL = ["#F6C445", "#EF8A80", "#8BCB8E", "#7FB6EE", "#C78DD6", "#FFB060", "#5CC4B8", "#F38BB5", "#B39A8C", "#A8B8C4"];
+var GEO_BLEUS = ["#5FA8E0", "#8CC8F2", "#3F8FD0", "#B5DDF7", "#2F7AB8"];
+var SVG_INTERDITS = "script,foreignObject,iframe,image,use,a,style";
+function svgPropre(src) {
+  try {
+    var doc = new DOMParser().parseFromString(src, "image/svg+xml"), root = doc.documentElement;
+    if (!root || root.nodeName !== "svg" || doc.getElementsByTagName("parsererror").length) return null;
+    Array.prototype.slice.call(root.querySelectorAll(SVG_INTERDITS)).forEach(function (n) { n.remove(); });
+    Array.prototype.slice.call(root.querySelectorAll("*")).concat([root]).forEach(function (n) {
+      Array.prototype.slice.call(n.attributes).forEach(function (a) {
+        var k = a.name.toLowerCase();
+        if (k.slice(0, 2) === "on" || k.indexOf("href") >= 0) n.removeAttribute(a.name);
+      });
+    });
+    return document.importNode(root, true);
+  } catch (e) { return null; }
+}
+/* fabrique le fond ; renvoie { svg, vb, lieu(l) → {zones: [éléments], labels: [[x,y]], type, x, y} } */
+function fondCarte(fond, lecon) {
+  var C = window.CARTES || {}, F = { parts: {} };
+  if (fond === "monde" && C.monde) {
+    var m = C.monde; F.vb = m.vb;
+    F.svg = sv("svg", { viewBox: m.vb.join(" "), class: "geo monde" }, sv("path", { d: m.contour, class: "geo-eau" }));
+    var gE = sv("g"), gT = sv("g");
+    Object.keys(m.parts).forEach(function (k) {
+      var p = m.parts[k], oc = p.type === "ocean";
+      var el = sv("path", { d: p.d, class: oc ? "geo-eau" : "geo-terre", "data-part": k });
+      (oc ? gE : gT).appendChild(el);
+      F.parts[k] = { el: el, nom: p.nom, labels: p.labels, type: p.type };
+    });
+    F.svg.appendChild(gE); F.svg.appendChild(gT);
+    F.lieu = function (l) {
+      var keys = m.zones[l.zone] || (m.parts[l.zone] ? [l.zone] : m.parts["oc_" + l.zone] ? ["oc_" + l.zone] : null);
+      if (!keys) return null;
+      return { zones: keys.map(function (k) { return F.parts[k].el; }), type: F.parts[keys[0]].type,
+        labels: keys.reduce(function (a, k) { return a.concat(F.parts[k].labels); }, []) };
+    };
+  } else if (fond === "france" && C.france) {
+    var f = C.france, pr = f.proj; F.vb = f.vb;
+    F.svg = sv("svg", { viewBox: f.vb.join(" "), class: "geo france" },
+      sv("rect", { x: 0, y: 0, width: f.vb[2], height: f.vb[3], class: "geo-eau" }),
+      sv("path", { d: f.voisins, class: "geo-voisin" }), sv("path", { d: f.france, class: "geo-terre" }),
+      sv("path", { d: f.regions, class: "geo-limite" }));
+    f.textes.forEach(function (t) { F.svg.appendChild(sv("text", { x: t[1], y: t[2], class: "geo-fond-txt " + t[3] }, t[0])); });
+    F.lieu = function (l) {
+      if (l.lat == null || l.lon == null) return null;
+      return { type: "point", x: (l.lon - pr.lon0) * pr.c * pr.k, y: (pr.lat1 - l.lat) * pr.k };
+    };
+  } else {
+    var im = ((lecon || D).images || []).filter(function (x) { return x.id === fond; })[0];
+    F.svg = im && im.svg ? svgPropre(im.svg) : null;
+    if (!F.svg) return null;
+    F.svg.setAttribute("class", "geo local");
+    F.svg.removeAttribute("width"); F.svg.removeAttribute("height");
+    F.vb = (F.svg.getAttribute("viewBox") || "0 0 1000 1000").split(/[\s,]+/).map(Number);
+    F.lieu = function (l) {
+      if (l.zone) {
+        var el = F.svg.querySelector("[id='" + l.zone.replace(/'/g, "") + "']");
+        if (!el) return null;
+        el.removeAttribute("fill"); el.removeAttribute("stroke");
+        var lx = parseFloat(el.getAttribute("data-lx")), ly = parseFloat(el.getAttribute("data-ly"));
+        return { zones: [el], type: "zone", labels: isNaN(lx) ? [] : [[lx, ly]] };
+      }
+      if (l.x != null && l.y != null) return { type: "point", x: l.x, y: l.y };
+      return null;
+    };
+  }
+  F.u = F.vb[2] / 1000; /* unité : 1/1000 de la largeur */
+  return F;
+}
+function geoLabel(F, x, y, nom, cls) {
+  /* l'étiquette reste dans le cadre (largeur estimée d'après le nombre de lettres) */
+  var fs = Math.round(26 * F.u), demi = String(nom).length * fs * 0.29, v = F.vb;
+  x = Math.max(v[0] + demi + 4 * F.u, Math.min(v[0] + v[2] - demi - 4 * F.u, x));
+  y = Math.max(v[1] + fs + 4 * F.u, Math.min(v[1] + v[3] - 8 * F.u, y));
+  var g = sv("text", { x: x, y: y, class: "geo-label" + (cls ? " " + cls : ""), "font-size": fs }, nom);
+  F.svg.appendChild(g);
+  return g;
+}
+function geoRose(F) {
+  var u = F.u, r = 46 * u, cx = F.vb[0] + F.vb[2] - r - 30 * u, cy = F.vb[1] + r + 40 * u;
+  var g = sv("g", { class: "geo-rose", "aria-hidden": "true" },
+    sv("circle", { cx: cx, cy: cy, r: r * 0.95, class: "geo-rose-fond" }),
+    sv("path", { d: "M" + cx + " " + (cy - r) + " L" + (cx + r * 0.22) + " " + cy + " L" + cx + " " + (cy + r) + " L" + (cx - r * 0.22) + " " + cy + "Z" }),
+    sv("path", { d: "M" + (cx - r) + " " + cy + " L" + cx + " " + (cy - r * 0.22) + " L" + (cx + r) + " " + cy + " L" + cx + " " + (cy + r * 0.22) + "Z" }));
+  [["N", 0, -1], ["S", 0, 1], ["E", 1, 0], ["O", -1, 0]].forEach(function (p) {
+    g.appendChild(sv("text", { x: cx + p[1] * (r + 20 * u), y: cy + p[2] * (r + 20 * u) + 9 * u, "font-size": Math.round(26 * u), class: "geo-rose-txt" }, p[0]));
+  });
+  F.svg.appendChild(g);
+}
+function labelsDe(F, l, r) {
+  if (l.lx != null && l.ly != null) return [[l.lx, l.ly]];
+  if (r.type === "point") return [[r.x, r.y - 24 * F.u]];
+  return r.labels;
+}
+function geoPoint(F, r, id) {
+  var c = sv("circle", { cx: r.x, cy: r.y, r: 13 * F.u, class: "geo-point", "data-cible": id || null });
+  F.svg.appendChild(c);
+  return c;
+}
+
+/* bloc « carte » de la leçon : les repères colorés et nommés */
+function blocCarte(b) {
+  var F = fondCarte(b.fond);
+  if (!F) return h("p", { class: "parentnote", text: "Carte indisponible." });
+  var bleu = 0, coul = 0, etiq = [];
+  b.reperes.forEach(function (l) {
+    var r = F.lieu(l); if (!r) return;
+    if (r.type === "point") geoPoint(F, r);
+    else r.zones.forEach(function (z) { z.style.fill = r.type === "ocean" ? GEO_BLEUS[bleu % GEO_BLEUS.length] : GEO_COUL[coul % GEO_COUL.length]; });
+    if (r.type === "ocean") bleu++; else if (r.type !== "point") coul++;
+    etiq = etiq.concat(labelsDe(F, l, r).map(function (p) { return [p, plain(l.nom), r.type]; }));
+  });
+  etiq.forEach(function (e) { geoLabel(F, e[0][0], e[0][1], e[1], e[2] === "ocean" ? "eau" : ""); });
+  if (b.rose) geoRose(F);
+  F.svg.setAttribute("role", "img");
+  F.svg.setAttribute("aria-label", (b.titre ? plain(b.titre) + " : " : "Carte : ") + b.reperes.map(function (l) { return plain(l.nom); }).join(", "));
+  return h("div", { class: "geo-wrap" }, F.svg);
+}
+
+/* ------------------------------------------------------------ étape « Sur la carte » */
+var GEO_ESSAIS = 3; /* au 3e essai raté, le lieu est montré */
+function stepCarte(main) {
+  var C = D.carte, modes = C.modes || ["trouver", "nommer"];
+  var test = fondCarte(C.fond);
+  if (!test) { main.appendChild(h("div", { class: "card", text: "Cette carte ne s'affiche pas sur cet appareil." })); setNext(nextLabel(), goNext); return; }
+  var cibles = C.cibles.filter(function (c) { return test.lieu(c); });
+  var Q = [];
+  if (modes.indexOf("trouver") >= 0) shuffle(cibles).forEach(function (c) { Q.push({ mode: "trouver", c: c }); });
+  if (modes.indexOf("nommer") >= 0 && cibles.length >= 3) shuffle(cibles).slice(0, Math.min(4, cibles.length)).forEach(function (c) { Q.push({ mode: "nommer", c: c }); });
+  var qi = 0, first = 0, trouves = {};
+  setNext(null);
+  function show() {
+    main.querySelectorAll(".gzone").forEach(function (n) { n.remove(); });
+    var zone = h("div", { class: "gzone" }); main.appendChild(zone);
+    setProgress(qi / Q.length);
+    if (qi >= Q.length) {
+      journal.etape("finies", "carte");
+      zone.appendChild(h("div", { class: "card end" }, h("div", { class: "big", text: first >= Q.length - 1 ? "🏆" : "🎉" }),
+        h("p", { text: "Tu as trouvé " + first + " lieu" + (first > 1 ? "x" : "") + " du premier coup sur " + Q.length + " !" })));
+      setProgress(1); setNext(nextLabel(), goNext); return;
+    }
+    var q = Q[qi], c = q.c, F = fondCarte(C.fond), tries = 0, solved = false, faux = [], evt = null;
+    var R = {}; /* id de cible → résolution sur ce fond */
+    cibles.forEach(function (x) { R[x.id] = F.lieu(x); });
+    var r = R[c.id], cible = r.type === "ocean" ? "cet océan" : r.type === "continent" ? "ce continent" : "ce lieu";
+    function noteGeo(ok) {
+      var o = { erreurs: tries, faux: faux.slice(), resolu: ok };
+      if (evt) journal.maj(evt, o);
+      else { o.k = "geo"; o.id = c.id; o.nom = plain(c.nom); o.mode = q.mode; evt = journal.ev(o); }
+    }
+    /* dessin : les lieux à trouver (zones colorables, points), les étiquettes déjà gagnées */
+    var cible2el = {};
+    cibles.forEach(function (x) {
+      var rx = R[x.id];
+      if (rx.type === "point") cible2el[x.id] = [geoPoint(F, rx, x.id)];
+      else { rx.zones.forEach(function (z) { z.classList.add("geo-cible"); z.setAttribute("data-cible", x.id); }); cible2el[x.id] = rx.zones; }
+    });
+    function etiquette(x, cls) { labelsDe(F, x, R[x.id]).forEach(function (p) { geoLabel(F, p[0], p[1], plain(x.nom), (R[x.id].type === "ocean" ? "eau " : "") + (cls || "")); }); }
+    if (q.mode === "trouver") cibles.forEach(function (x) { if (trouves[x.id]) { cible2el[x.id].forEach(function (e) { e.classList.add("geo-ok"); }); etiquette(x); } });
+    if (C.rose) geoRose(F);
+    var titre, qsay;
+    if (q.mode === "trouver") {
+      titre = h("div", { class: "q" }, "Touche sur la carte : ", h("strong", null, rich(c.nom)));
+      qsay = sayBtn(function () { return [{ text: "Touche sur la carte : " + plain(c.nom) + ".", lang: "fr-FR" }]; });
+    } else {
+      cible2el[c.id].forEach(function (e) { e.classList.add("geo-montre"); });
+      var qn = C.question_nommer || ("Quel est " + cible + " ?");
+      titre = h("div", { class: "q" }, rich(qn));
+      qsay = sayBtn(function () { return segments(qn); });
+    }
+    var fb = h("div", { class: "geo-fb", "aria-live": "polite" });
+    zone.appendChild(h("div", { class: "counter", text: (q.mode === "trouver" ? "Lieu " : "Question ") + (qi + 1) + " sur " + Q.length }));
+    zone.appendChild(h("div", { class: "card has-say geo-q" }, titre, fb, qsay));
+    var carte = h("div", { class: "card geo-wrap jeu" + (q.mode === "nommer" ? " nommer" : "") }, F.svg);
+    zone.appendChild(carte);
+    function gagne() {
+      solved = true; trouves[c.id] = true;
+      cible2el[c.id].forEach(function (e) { e.classList.remove("geo-montre"); e.classList.add("geo-ok"); });
+      if (q.mode === "trouver") etiquette(c, "nouveau");
+      if (tries === 0) { first++; addStar(); }
+      noteGeo(true);
+      fb.innerHTML = "";
+      fb.appendChild(h("div", { class: "feedback good" }, (tries === 0 ? "Bravo ! ⭐ " : "Bravo, tu as trouvé ! 👏 ") , c.info ? rich(c.info) : (q.mode === "trouver" ? "" : "C'est " + plain(c.nom) + ".")));
+      if (c.info && TTS.auto) TTS.speak(segments(c.info));
+      suivant();
+    }
+    function suivant() { setNext(qi < Q.length - 1 ? "Suivant ➜" : "Voir mon résultat ➜", function () { qi++; setNext(null); show(); }); }
+    function rate(nomTouche, els, avecArticle) {
+      tries++; if (nomTouche) faux.push(nomTouche); noteGeo(false);
+      if (nomTouche && !avecArticle) nomTouche = "« " + nomTouche + " »";
+      (els || []).forEach(function (e) { e.classList.add("geo-faux"); setTimeout(function () { e.classList.remove("geo-faux"); }, 900); });
+      fb.innerHTML = "";
+      if (tries >= GEO_ESSAIS) {
+        solved = true;
+        cible2el[c.id].forEach(function (e) { e.classList.add("geo-montre"); });
+        if (q.mode === "trouver") etiquette(c, "nouveau");
+        fb.appendChild(h("div", { class: "feedback again" }, "Regarde : " + plain(c.nom) + " est ici. Tu le retiendras ! 💪"));
+        suivant(); return;
+      }
+      fb.appendChild(h("div", { class: "feedback again" }, (nomTouche ? "Non, ça, c'est " + nomTouche + ". " : "Pas tout à fait. ") + "Essaie encore ! 💪"));
+    }
+    if (q.mode === "trouver") {
+      /* toucher : une zone, sinon le point le plus proche (tolérance pour le doigt) */
+      F.svg.addEventListener("click", function (ev) {
+        if (solved) return;
+        var t = ev.target, id = t.getAttribute && t.getAttribute("data-cible");
+        if (!id) {
+          var pt = F.svg.createSVGPoint(); pt.x = ev.clientX; pt.y = ev.clientY;
+          var m = F.svg.getScreenCTM(); if (m) pt = pt.matrixTransform(m.inverse());
+          var best = null, bd = 45 * F.u;
+          cibles.forEach(function (x) { var rx = R[x.id]; if (rx.type !== "point") return;
+            var dd = Math.hypot(rx.x - pt.x, rx.y - pt.y); if (dd < bd) { bd = dd; best = x.id; } });
+          id = best;
+        }
+        if (id === c.id) return gagne();
+        if (id) { var x = cibles.filter(function (y) { return y.id === id; })[0]; return rate(plain(x.nom), cible2el[id]); }
+        var part = t.getAttribute && t.getAttribute("data-part");
+        if (part && F.parts[part]) return rate(F.parts[part].nom, [t], true);
+        fb.innerHTML = ""; fb.appendChild(h("div", { class: "feedback again" }, "Touche une des zones de couleur, ou un point."));
+      });
+    } else {
+      var autres = shuffle(cibles.filter(function (x) { return x.id !== c.id; })).slice(0, 2);
+      var list = h("div", { class: "choices" });
+      shuffle([c].concat(autres)).forEach(function (x) {
+        var b = h("button", { class: "btn", type: "button", "data-nom": x.id }, rich(x.nom));
+        b.addEventListener("click", function () {
+          if (solved || b.classList.contains("tried")) return;
+          if (x.id === c.id) { b.classList.add("right"); return gagne(); }
+          b.classList.add("tried"); rate(plain(x.nom), []);
+          if (solved) list.querySelector("[data-nom='" + c.id + "']").classList.add("right");
+          else { fb.innerHTML = ""; fb.appendChild(h("div", { class: "feedback again" }, "Ce n'est pas « " + plain(x.nom) + " ». Regarde bien la carte ! 💪")); }
+        });
+        list.appendChild(h("div", { class: "choice" }, b, sayBtn(function () { return segments(x.nom); }, "inline")));
+      });
+      zone.appendChild(list);
+    }
+    if (TTS.auto) TTS.speak(q.mode === "trouver" ? [{ text: "Touche sur la carte : " + plain(c.nom) + ".", lang: "fr-FR" }] : segments(C.question_nommer || ("Quel est " + cible + " ?")), qsay);
+  }
+  show();
+}
+
+/* ------------------------------------------------------------ animations (astres) */
+/* dessinées par l'appli : le Soleil, la Terre, la Lune ; pas à l'échelle */
+var MOIS = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"];
+var PLANETES = [["Mercure", 72, 4, "#B0A090", 3], ["Vénus", 105, 7, "#E8C27A", 6], ["Terre", 140, 8, "#3C8DDB", 10], ["Mars", 175, 6, "#D2603A", 18],
+  ["Jupiter", 230, 17, "#D9A877", 38], ["Saturne", 285, 14, "#E3CF8E", 60], ["Uranus", 333, 10, "#8FD3E0", 90], ["Neptune", 378, 10, "#4E6FD8", 120]];
+function soleil(cx, cy, r, ray) {
+  var g = sv("g", { class: "astre-soleil" });
+  ray = ray || 16;
+  for (var i = 0; i < 12; i++) {
+    var a = i * Math.PI / 6;
+    g.appendChild(sv("line", { x1: cx + Math.cos(a) * (r + 5), y1: cy + Math.sin(a) * (r + 5), x2: cx + Math.cos(a) * (r + 5 + ray), y2: cy + Math.sin(a) * (r + 5 + ray), class: "rayon" }));
+  }
+  g.appendChild(sv("circle", { cx: cx, cy: cy, r: r, class: "corps" }));
+  return g;
+}
+function lunePhase(r, phi) { /* disque éclairé vu de la Terre ; phi en degrés, 0 = nouvelle lune, 180 = pleine lune */
+  phi = ((phi % 360) + 360) % 360;
+  var rx = Math.abs(Math.cos(phi * Math.PI / 180)) * r, croit = phi < 180;
+  var cote = croit ? 1 : 0, bombe = croit ? (phi > 90 ? 1 : 0) : (phi < 270 ? 0 : 1);
+  return "M0 " + (-r) + " A" + r + " " + r + " 0 0 " + cote + " 0 " + r + " A" + rx.toFixed(1) + " " + r + " 0 0 " + bombe + " 0 " + (-r) + "Z";
+}
+var ANIMS = {
+  systeme_solaire: function (svg, cap) {
+    svg.setAttribute("viewBox", "0 0 800 500");
+    var cx = 400, cy = 250, k = 0.58, P = [];
+    PLANETES.forEach(function (p) { svg.appendChild(sv("ellipse", { cx: cx, cy: cy, rx: p[1], ry: p[1] * k, class: "orbite" + (p[0] === "Terre" ? " terre" : "") })); });
+    svg.appendChild(soleil(cx, cy, 24, 10));
+    svg.appendChild(sv("text", { x: cx, y: cy + 5, class: "astre-txt fonce petit" }, "Soleil"));
+    PLANETES.forEach(function (p, i) {
+      var g = sv("g", { class: "planete" + (p[0] === "Terre" ? " terre" : "") });
+      if (p[0] === "Saturne") g.appendChild(sv("ellipse", { cx: 0, cy: 0, rx: p[2] * 1.9, ry: p[2] * 0.6, class: "anneau" }));
+      g.appendChild(sv("circle", { cx: 0, cy: 0, r: p[2], fill: p[3] }));
+      g.appendChild(sv("text", { x: 0, y: -p[2] - 7, class: "astre-txt petit" }, p[0]));
+      if (p[0] === "Terre") { g.appendChild(sv("circle", { cx: 16, cy: 0, r: 3, class: "lune-mini" })); }
+      svg.appendChild(g); P.push({ g: g, p: p, a0: i * 1.7 });
+    });
+    cap.textContent = "Les 8 planètes tournent autour du Soleil. La Terre est la 3e.";
+    return function (t) {
+      P.forEach(function (o) {
+        var a = o.a0 + t / o.p[4] * 2 * Math.PI;
+        o.g.setAttribute("transform", "translate(" + (cx + Math.cos(a) * o.p[1]).toFixed(1) + " " + (cy - Math.sin(a) * o.p[1] * k).toFixed(1) + ")");
+        if (o.p[0] === "Terre") { var m = o.g.querySelector(".lune-mini"), b = t / 1.2 * 2 * Math.PI; m.setAttribute("cx", (Math.cos(b) * 16).toFixed(1)); m.setAttribute("cy", (-Math.sin(b) * 8).toFixed(1)); }
+      });
+    };
+  },
+  jour_nuit: function (svg, cap) {
+    svg.setAttribute("viewBox", "0 0 800 460");
+    var cx = 520, cy = 230, R = 160, T = 16;
+    svg.appendChild(soleil(-20, cy, 120));
+    svg.appendChild(sv("text", { x: 50, y: cy + 8, class: "astre-txt fonce" }, "Soleil"));
+    for (var i = -3; i <= 3; i++) svg.appendChild(sv("line", { x1: 130, y1: cy + i * 45, x2: cx - R - 10, y2: cy + i * 45, class: "lumiere" }));
+    var terre = sv("g", { class: "terre-rot" });
+    terre.appendChild(sv("circle", { cx: 0, cy: 0, r: R, class: "ocean" }));
+    [[-60, -70, 55, 35], [50, -40, 45, 60], [20, 80, 60, 30], [-80, 50, 30, 45], [90, 60, 25, 20]].forEach(function (c) {
+      terre.appendChild(sv("ellipse", { cx: c[0], cy: c[1], rx: c[2], ry: c[3], class: "continent" })); });
+    terre.appendChild(sv("circle", { cx: 0, cy: -R + 24, r: 15, class: "moi" }));
+    svg.appendChild(sv("g", { transform: "translate(" + cx + " " + cy + ")" }, terre,
+      sv("path", { d: "M0 " + (-R) + " A" + R + " " + R + " 0 0 1 0 " + R + "Z", class: "nuit" }),
+      sv("circle", { cx: 0, cy: 0, r: 9, class: "pole" })));
+    svg.appendChild(sv("text", { x: cx - R / 2, y: cy + R + 32, class: "astre-txt" }, "jour"));
+    svg.appendChild(sv("text", { x: cx + R / 2, y: cy + R + 32, class: "astre-txt" }, "nuit"));
+    return function (t) {
+      var deg = (t / T * 360) % 360; /* 0° : « Toi » face au Soleil = midi */
+      terre.setAttribute("transform", "rotate(" + (-90 - deg).toFixed(1) + ")");
+      var hh = Math.floor((12 + deg / 15) % 24), jour = hh >= 6 && hh < 18;
+      cap.textContent = "Il est " + hh + " h chez toi (point rouge) : " + (jour ? "c'est le jour ☀️" : "c'est la nuit 🌙") + ". Un tour = 24 heures.";
+    };
+  },
+  annee: function (svg, cap) {
+    svg.setAttribute("viewBox", "0 0 800 470");
+    var cx = 400, cy = 235, rx = 320, ry = 170, T = 24;
+    svg.appendChild(sv("ellipse", { cx: cx, cy: cy, rx: rx, ry: ry, class: "orbite terre" }));
+    MOIS.forEach(function (m, i) {
+      var a = i / 12 * 2 * Math.PI;
+      svg.appendChild(sv("text", { x: cx + Math.cos(a) * (rx + (Math.abs(Math.cos(a)) > 0.8 ? 0 : 0)) * 0.78, y: cy - Math.sin(a) * ry * 0.78 + 6, class: "astre-txt mois" }, m));
+    });
+    svg.appendChild(soleil(cx, cy, 40));
+    svg.appendChild(sv("text", { x: cx, y: cy + 6, class: "astre-txt fonce" }, "Soleil"));
+    var terre = sv("g", null, sv("circle", { cx: 0, cy: 0, r: 16, class: "terre-p" }), sv("text", { x: 0, y: -24, class: "astre-txt" }, "Terre"));
+    svg.appendChild(terre);
+    return function (t) {
+      var f = (t / T) % 1, a = f * 2 * Math.PI;
+      terre.setAttribute("transform", "translate(" + (cx + Math.cos(a) * rx).toFixed(1) + " " + (cy - Math.sin(a) * ry).toFixed(1) + ")");
+      var j = Math.floor(f * 365) + 1;
+      cap.textContent = "Jour " + j + " sur 365, en " + MOIS[Math.min(11, Math.floor(f * 12))] + ". Un tour du Soleil = 1 an.";
+    };
+  },
+  lune: function (svg, cap) {
+    svg.setAttribute("viewBox", "0 0 800 440");
+    var cx = 300, cy = 220, R = 150, T = 20;
+    for (var i = -3; i <= 3; i++) svg.appendChild(sv("line", { x1: 0, y1: cy + i * 55, x2: 40, y2: cy + i * 55, class: "lumiere" }));
+    svg.appendChild(sv("text", { x: 150, y: 34, class: "astre-txt" }, "← lumière du Soleil"));
+    svg.appendChild(sv("circle", { cx: cx, cy: cy, r: R, class: "orbite" }));
+    svg.appendChild(sv("circle", { cx: cx, cy: cy, r: 40, class: "terre-p" }));
+    svg.appendChild(sv("path", { d: "M" + cx + " " + (cy - 40) + " A40 40 0 0 1 " + cx + " " + (cy + 40) + "Z", class: "nuit" }));
+    svg.appendChild(sv("text", { x: cx, y: cy + 62, class: "astre-txt" }, "Terre"));
+    var lune = sv("g", null, sv("circle", { cx: 0, cy: 0, r: 20, class: "lune-sombre" }), sv("path", { d: "M0 -20 A20 20 0 0 0 0 20Z", class: "lune-claire" }));
+    svg.appendChild(lune);
+    svg.appendChild(sv("rect", { x: 560, y: 70, width: 220, height: 300, rx: 24, class: "encart" }));
+    svg.appendChild(sv("text", { x: 670, y: 110, class: "astre-txt" }, "Depuis la Terre,"));
+    svg.appendChild(sv("text", { x: 670, y: 136, class: "astre-txt" }, "je vois :"));
+    var vue = sv("g", { transform: "translate(670 240)" }, sv("circle", { cx: 0, cy: 0, r: 70, class: "lune-sombre vue" }));
+    var claire = sv("path", { class: "lune-claire" }); vue.appendChild(claire);
+    svg.appendChild(vue);
+    return function (t) {
+      var phi = (t / T * 360) % 360, a = Math.PI + phi * Math.PI / 180;
+      lune.setAttribute("transform", "translate(" + (cx + Math.cos(a) * R).toFixed(1) + " " + (cy - Math.sin(a) * R).toFixed(1) + ")");
+      claire.setAttribute("d", lunePhase(70, phi));
+      var j = Math.floor(phi / 360 * 29.5) + 1;
+      var etat = phi < 12 || phi > 348 ? "nouvelle Lune : on ne la voit presque pas" : Math.abs(phi - 180) < 12 ? "pleine Lune" : phi < 180 ? "la partie éclairée grandit" : "la partie éclairée diminue";
+      cap.textContent = "Jour " + j + " : " + etat + ".";
+    };
+  }
+};
+function blocAnimation(b) {
+  var svg = sv("svg", { class: "anim " + b.modele, role: "img", "aria-label": b.legende ? plain(b.legende) : "Animation" });
+  var cap = h("p", { class: "anim-cap" });
+  var tick = (ANIMS[b.modele] || function () { return function () {}; })(svg, cap);
+  var t = 0, last = null, play = true;
+  var reduit = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (reduit) play = false;
+  var btn = h("button", { class: "btn soft anim-btn", type: "button", "data-anim": b.modele }, "");
+  function lbl() { btn.textContent = play ? "⏸️ Pause" : "▶️ Lecture"; }
+  btn.addEventListener("click", function () { play = !play; last = null; lbl(); if (play) requestAnimationFrame(frame); });
+  var vu = false, attente = 0;
+  function frame(now) {
+    /* s'arrête quand l'écran change (dessin retiré), ou s'il n'est jamais affiché */
+    if (svg.isConnected) vu = true; else if (vu || ++attente > 120) return;
+    if (!play) return;
+    if (last !== null) t += Math.min(0.1, (now - last) / 1000);
+    last = now; tick(t);
+    requestAnimationFrame(frame);
+  }
+  tick(0); lbl();
+  requestAnimationFrame(frame);
+  return [svg, cap, h("div", { class: "actions anim-actions" }, btn)];
 }
 
 /* ------------------------------------------------------------ fin */
@@ -1414,8 +1809,11 @@ var THEMES = [
   ["operations", "mathematiques", "➗", "Opérations"], ["calcul_mental", "mathematiques", "⚡", "Calcul mental"],
   ["mesures", "mathematiques", "📏", "Mesures"], ["heure", "mathematiques", "🕒", "L'heure"],
   ["geometrie", "mathematiques", "📐", "Géométrie"], ["monnaie", "mathematiques", "💶", "Monnaie"],
-  ["problemes", "mathematiques", "💡", "Problèmes"], ["donnees", "mathematiques", "📊", "Tableaux et graphiques"]
-].map(function (x) { return { key: x[0], matiere: x[1], icon: x[2], label: x[3] }; });
+  ["problemes", "mathematiques", "💡", "Problèmes"], ["donnees", "mathematiques", "📊", "Tableaux et graphiques"],
+  ["astres", "questionner_le_monde", "☀️", "La Terre et les astres", "Questionner l'espace"],
+  ["monde", "questionner_le_monde", "🌍", "Continents et océans", "Questionner l'espace"],
+  ["lieux", "questionner_le_monde", "📍", "Villes et lieux", "Questionner l'espace"]
+].map(function (x) { return { key: x[0], matiere: x[1], icon: x[2], label: x[3], rubrique: x[4] || null }; });
 var THEME = {}; THEMES.forEach(function (x) { THEME[x.key] = x; });
 var ORDRE_MATIERES = ["francais", "mathematiques", "questionner_le_monde", "langue_vivante", "emc", "arts", "autre"];
 /* leçons publiées avant le champ meta.theme : on devine le thème d'après le titre, puis le domaine */
@@ -1531,8 +1929,13 @@ function renderHome(info) {
     var keys = THEMES.filter(function (x) { return x.matiere === mat; }).map(function (x) { return x.key; }).concat(["m:" + mat])
       .filter(function (k) { return groupes[k]; });
     if (!keys.length) return;
-    app.appendChild(h("h2", { class: "matiere", text: (MATIERES[mat] || MATIERES.autre).label }));
-    app.appendChild(h("div", { class: "themes" }, keys.map(function (k) {
+    /* une rubrique par groupe de thèmes (ex. « Questionner l'espace »), sinon le nom de la matière */
+    var rubriques = [], parRub = {};
+    keys.forEach(function (k) { var rb = (THEME[k] && THEME[k].rubrique) || (MATIERES[mat] || MATIERES.autre).label;
+      if (!parRub[rb]) { parRub[rb] = []; rubriques.push(rb); } parRub[rb].push(k); });
+    rubriques.forEach(function (rb) {
+    app.appendChild(h("h2", { class: "matiere", text: rb }));
+    app.appendChild(h("div", { class: "themes" }, parRub[rb].map(function (k) {
       var ls = groupes[k], ti = themeInfo(k), nv = ls.filter(estNouvelle).length;
       return h("button", { class: "theme-tile", type: "button", "data-theme": k, onclick: function () { VUE = k; renderHome(); } },
         h("span", { class: "ic", "aria-hidden": "true", text: ti.icon }),
@@ -1540,6 +1943,7 @@ function renderHome(info) {
           h("span", { class: "sous", text: ls.length + " leçon" + (ls.length > 1 ? "s" : "") }),
           nv ? h("span", { class: "nouveau", text: nv + " nouvelle" + (nv > 1 ? "s" : "") + " ✨" }) : null));
     })));
+    });
   });
   if (info && info.illisibles) app.appendChild(h("p", { class: "parentnote", text: info.illisibles + " leçon(s) illisible(s) : le mot de passe a peut-être changé (zone parent > Verrouiller)." }));
   app.appendChild(piedParent());
@@ -1647,6 +2051,20 @@ function genererBilan(all, pid, depuis) {
     if (demain.length) pb.push("cartes à revoir demain : " + demain.map(function (e) { return e.id + " " + guil(e.recto); }).join(", "));
     if (hesite.length) pb.push("cartes sues après hésitation : " + hesite.map(function (e) { return e.id + " " + guil(e.recto); }).join(", "));
     if (cartes.length) ok.push("cartes " + cartes.filter(function (e) { return !e.demain && !e.revoir; }).length + "/" + cartes.length + " sues tout de suite");
+    /* carte : lieux à toucher ou à nommer */
+    var gz = {}, gn = [];
+    ev.filter(function (e) { return e.k === "geo"; }).forEach(function (e) {
+      var key = e.id + ":" + e.mode;
+      if (!gz[key]) { gz[key] = { e: e, fois: 0, vues: 0, faux: [] }; gn.push(key); }
+      var z = gz[key]; z.vues++;
+      if (e.erreurs > 0 || e.resolu === false) { z.fois++; e.faux.forEach(function (f) { if (z.faux.indexOf(f) < 0) z.faux.push(f); }); }
+    });
+    var gok = 0;
+    gn.forEach(function (k) { var z = gz[k];
+      if (z.fois) pb.push("carte " + z.e.id + " " + guil(z.e.nom) + (z.e.mode === "nommer" ? " (le nommer)" : " (le toucher)") + " : raté du premier coup " + z.fois + " fois sur " + z.vues +
+        (z.faux.length ? " (confondu avec : " + z.faux.map(guil).join(", ") + ")" : ""));
+      else gok++; });
+    if (gn.length) ok.push("carte " + gok + "/" + gn.length + " du premier coup");
     /* récitation : niveau de masquage le plus haut atteint */
     var rec = ev.filter(function (e) { return e.k === "recitation"; });
     if (rec.length) { var mx = Math.max.apply(null, rec.map(function (e) { return e.niveau; })), MX = rec[0].max;
@@ -1754,8 +2172,9 @@ function cartePrograme() {
   var groupes = {};
   LESSONS.forEach(function (l) { var k = themeOf(l); (groupes[k] = groupes[k] || []).push(l); });
   var lignes = [];
-  ["francais", "mathematiques"].forEach(function (mat) {
-    lignes.push(h("div", { class: "label", text: MATIERES[mat].label }));
+  ["francais", "mathematiques", "questionner_le_monde"].forEach(function (mat) {
+    var th = THEMES.filter(function (x) { return x.matiere === mat; });
+    lignes.push(h("div", { class: "label", text: (th[0] && th[0].rubrique) || MATIERES[mat].label }));
     THEMES.filter(function (x) { return x.matiere === mat; }).forEach(function (x) {
       var ls = (groupes[x.key] || []).slice().sort(ordreMethode);
       lignes.push(ls.length
