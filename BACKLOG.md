@@ -169,9 +169,85 @@ Acquis (premier coup)
 
 ---
 
+## Lot 5 : problèmes guidés [DEMANDÉ 15/11/2026] · cadré, à lancer
+
+**Besoin.** Résoudre des problèmes est une priorité du programme 2025 du cycle 2, et l'appli n'en propose aucun. Le parent veut un exercice pédagogique sans être trop lourd. Il fournira ensuite le cahier d'exercices de problèmes de l'enfant : il fixera l'ordre des cas à travailler, pas la mécanique.
+
+**Référence de classe.** La méthode de la classe tient en 4 temps : je comprends, je représente (schéma en barres), je calcule (j'écris l'opération), je réponds par une phrase avec l'unité. Les problèmes sont classés en 7 stratégies : 1 le tout ; 2 une partie d'un tout ; 3 un partage ; 4 une comparaison (plus grand, plus petit, écart) ; 5 « fois plus, fois moins » ; 6 les durées ; 7 le produit cartésien. Plus les problèmes à plusieurs étapes. Les schémas sont des barres : le tout en haut, les parties en dessous, le « ? » sur la case cherchée, une flèche pour l'écart.
+Règle de CLAUDE.md : énoncés, contextes et schémas originaux. Aucun exemple du fichier n'est repris, même avec d'autres nombres.
+
+**[ARBITRÉ 15/11/2026, délégué par le parent : « pédagogique sans être trop lourd »]**
+- **Un seul écran par problème, pas quatre.** L'étape « comprendre » est incluse dans le choix du schéma : placer le « ? » au bon endroit, c'est savoir ce qu'on cherche. L'étape « répondre » devient la correction : la phrase réponse s'affiche et est lue à voix haute.
+- **Trois gestes au doigt** :
+  1. l'énoncé est lu à voix haute, l'enfant choisit le bon schéma parmi 3 (mêmes barres et mêmes nombres, le « ? » à des places différentes) ;
+  2. l'enfant choisit l'opération : 4 grosses touches + − × ÷ ;
+  3. le calcul s'écrit (« 47 − 19 = ? »), l'enfant tape le résultat au pavé, avec l'unité affichée à côté.
+- **Aide qui s'efface.** Pour chaque cas, dans chaque profil : après 2 réussites de suite sans erreur, l'étape schéma est sautée (opération puis résultat seulement). Une erreur la fait revenir. Mémoire : `prob:<profil>` dans localStorage.
+- **Erreurs, sans punition.**
+  - Mauvais schéma : le bon schéma s'affiche, avec une phrase courte (« Tu cherches le tout : le ? est sur la grande barre. »).
+  - Mauvaise opération : renvoi vers le schéma (« Regarde : tu cherches une partie. »).
+  - Mauvais résultat : même comportement que les calculs actuels.
+- **Pièges voulus.** Chaque tirage peut proposer un cas où le mot de l'énoncé trompe : « de plus » qui mène à une soustraction (on cherche la plus petite quantité), ou un ajout qui mène à une soustraction (ce qu'il y avait avant). Le schéma sert précisément à éviter de deviner l'opération d'après les mots.
+
+**Périmètre du lot 5 : stratégies 1 à 5, une étape, 12 cas.**
+
+| Stratégie | Cas | Opération |
+|---|---|---|
+| 1 | parts différentes · parts identiques | + · × |
+| 2 | ce qui manque · ce qui reste après une perte · avant un ajout | − |
+| 3 | valeur d'une part · nombre de parts | ÷ |
+| 4 | plus grande quantité · plus petite · écart | + · − · − |
+| 5 | fois plus · fois moins | × · ÷ |
+
+Plus tard, chacune dans son propre lot : stratégie 6 (demi-droite du temps, réutilise `heure` et `conversion`), stratégie 7 (tableau et arbre), problèmes à deux étapes avec une question intermédiaire.
+
+**Technique.**
+- **Générateur** `probleme` dans `generateurs.js`, avec ces paramètres :
+  - `strategies` (liste 1 à 5) ou `cas` (liste des 12 identifiants) ;
+  - `max` pour + et − (défaut 999, jusqu'à 9 999) ;
+  - `tables` pour × et ÷ : un facteur dans la table, l'autre jusqu'à 12 ou un nombre de dizaines ; division toujours exacte.
+- **Contextes** : banque originale de situations, chacune avec un objet, une unité (€, kg, cm, m, ans, billes…) et un prénom. La vraisemblance est contrôlée : un âge ne dépasse pas 100.
+- **Objet rendu** : en plus de `consigne` et `expression`, le générateur renvoie le cas, l'opération attendue, les 3 schémas SVG (dont l'indice du bon), l'unité et la phrase réponse.
+- **Affichage** : l'étape Calculs reconnaît un calcul de type problème et l'affiche avec les 3 gestes. Les autres calculs ne changent pas.
+- **Défi chrono** : il exclut `probleme`, comme `multiplication_posee`.
+- **Mode quiz** : il peut tirer des problèmes dans sa part de calculs maths.
+- **Journal** : pour chaque problème, il enregistre le cas, le schéma choisi, l'opération choisie, les saisies et l'aide affichée ou non.
+- **Bilan** : il classe les erreurs par nature : compréhension (schéma), choix de l'opération, calcul.
+- **Leçon associée**, publiée à la livraison via la skill, thème `problemes` : la méthode en 4 temps, des cartes mémo (« Je cherche le tout, les parts sont identiques → × »…), un quiz, et des calculs générés `probleme`.
+
+**Critères d'acceptation.**
+- Le validateur et `test_generateurs.py` recalculent chaque problème tiré : expression juste, bon schéma unique, nombres dans les bornes, aucun résultat négatif ou non entier.
+- Sur la tablette, un problème se fait en moins d'une minute, au doigt, sans clavier.
+- Après 2 réussites d'un cas, le schéma n'est plus demandé ; après une erreur, il revient.
+- Le bilan distingue les erreurs de schéma, d'opération et de calcul.
+
+**Tests.** `test_generateurs.py` (1 000 tirages par cas), `test_app.py` ou un nouveau `tests/test_problemes.py` (3 gestes, aide qui s'efface, journal).
+
+---
+
 ## Idées non arbitrées [PROPOSÉ]
 
 À ne pas coder sans accord du parent.
+
+Axes issus de l'étude programme 2025 et de Duolingo Math (15/11/2026), à passer en revue avec le parent :
+- **Générateurs alignés sur le programme** :
+  - droite graduée (nombres, fractions) ;
+  - fractions : égalités, comparaison, complément à l'unité ;
+  - procédures de calcul mental (+9 et +19 par la dizaine, ×4 et ×8 par doublements, ×10, multiples de 25) ;
+  - monnaie (centimes et euros, rendre la monnaie) ;
+  - additions et soustractions posées ;
+  - conjugaison (présent, imparfait, futur, passé composé ; être, avoir, 1er groupe, faire, aller, dire, venir, pouvoir, voir, vouloir, prendre) ;
+  - lettre muette finale par la famille de mots.
+- **Manipulations au doigt** : régler les aiguilles d'une horloge, colorier une fraction, glisser des pièces et des billets, compléter une figure symétrique sur quadrillage.
+- **Jeux** :
+  - paires contre la montre (cartes et calculs existants) ;
+  - KenKen 4×4, pyramides de nombres, table de Pythagore à trous ;
+  - mot mystère (étiquettes de lettres, plutôt qu'un pendu) ;
+  - mots croisés (le plus coûteux).
+- **Mémorisation** : rattrapage automatique des erreurs du journal ; difficulté des générateurs qui s'ajuste aux résultats.
+- **Motivation** : série de jours avec un jour de repos automatique, collection ou badges. Ni vies ni classement.
+- **Oral et lecture** : fluence chronométrée validée par le parent ; dictée lue par la synthèse vocale, avec réponse par étiquettes.
+- **Côté parent** : carte de couverture du programme (attendus CE2 qui ont déjà une leçon).
 
 - **Séance du jour avec boîtes de Leitner** (J+1, J+3, J+7, J+15) : cartes et questions dues, toutes leçons confondues, en 5 à 10 minutes. Remplace le seul palier « demain » actuel, qui ne joue que si l'enfant rouvre la leçon.
 - **Nouveaux exercices au doigt** : relier, remettre dans l'ordre, texte à trous par étiquettes, tri par nature de mot, ligne graduée, dictée par choix d'orthographe.
