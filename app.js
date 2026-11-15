@@ -1,7 +1,7 @@
 /* Cahier de révisions : lecteur de leçons chiffrées. Aucune dépendance externe. */
 "use strict";
 (function () {
-var VERSION = "1.8.1";
+var VERSION = "1.9.0";
 var app = document.getElementById("app");
 var nextBar = document.getElementById("next");
 var D = null, IMG = {}, LESSONS = [], VUE = null, CTX = null; /* CTX : leçon d'origine de la question affichée (quiz transverse) */
@@ -763,6 +763,19 @@ function stepCalculs(main) {
     var csay = sayBtn(function () { return segOf(c.consigne); });
     var gauche = h("div", { class: "cgauche" }), droite = h("div", { class: "cdroite" });
     zone.appendChild(gauche); zone.appendChild(droite);
+    if (c.probleme) {
+      gauche.appendChild(h("div", { class: "counter", text: "Problème " + (ci + 1) + " sur " + CAL.length }));
+      gauche.appendChild(h("div", { class: "card has-say" }, h("div", { class: "q enonce" }, rich(txt(c.consigne))), csay));
+      probleme(c, gauche, droite, {
+        note: function (o) { var ev = { saisies: o.saisies, reussi: o.reussi, fini: o.fini, prob: o.prob };
+          if (evt) journal.maj(evt, ev);
+          else { ev.k = "calcul"; ev.id = c._qid || c.id; ev.gen = c.genere || null; ev.consigne = plain(txt(c.consigne)); ev.attendu = String(c.reponse); origine(ev, c); evt = journal.ev(ev); } },
+        reussi: function (premier) { if (premier) { first++; addStar(); } },
+        suite: function () { setNext(ci < CAL.length - 1 ? "Problème suivant ➜" : "Voir mon résultat ➜", function () { ci++; setNext(null); show(); }); }
+      });
+      if (TTS.auto) TTS.speak(segOf(c.consigne), csay);
+      return;
+    }
     gauche.appendChild(h("div", { class: "counter", text: "Calcul " + (ci + 1) + " sur " + CAL.length }));
     gauche.appendChild(h("div", { class: "card has-say" }, h("div", { class: "q" }, rich(txt(c.consigne))), itemImg(c), csay));
     var disp = h("div", { class: "saisie", id: "saisie", "aria-live": "polite", text: "?" });
@@ -802,6 +815,114 @@ function stepCalculs(main) {
     if (TTS.auto) TTS.speak(segOf(c.consigne), csay);
   }
   show();
+}
+
+/* ------------------------------------------------------------ problèmes guidés (générateur « probleme »)
+   1. choisir le schéma (sauté quand le cas est réussi 2 fois de suite sans erreur), 2. choisir l'opération, 3. calculer au pavé.
+   La phrase réponse sert de correction. Mémoire de l'aide : prob:<profil> = { cas: réussites d'affilée }. */
+var PROB_AISANCE = 2, OPS = ["+", "−", "×", "÷"];
+var OPS_NOMS = { "+": "une addition", "−": "une soustraction", "×": "une multiplication", "÷": "une division" };
+function probMem() { try { return JSON.parse(localStorage.getItem("prob:" + profils.actifId()) || "{}") || {}; } catch (e) { return {}; } }
+function probGuide(cas) { return (probMem()[cas] || 0) < PROB_AISANCE; }
+function probNote(cas, sansFaute) {
+  var m = probMem(); m[cas] = sansFaute ? (m[cas] || 0) + 1 : 0;
+  try { localStorage.setItem("prob:" + profils.actifId(), JSON.stringify(m)); } catch (e) {}
+}
+function schemaImg(sc, cls) {
+  return h("img", { class: "schema" + (cls ? " " + cls : ""), alt: sc.alt, src: "data:image/svg+xml;charset=utf-8," + encodeURIComponent(sc.svg) });
+}
+function probleme(c, gauche, droite, cb) {
+  var P = c.probleme, bon = P.schemas.filter(function (x) { return x.bon; })[0];
+  var etat = { cas: P.cas, guide: probGuide(P.cas), schema: null, ops: [] }, saisies = [], val = "", tries = 0, fini = false;
+  /* fb : aide du schéma, sous les schémas ; fd : opération, calcul et réponse, sous le pavé */
+  var etape = h("div", { class: "petape" }), fb = h("div", { class: "pfb", "aria-live": "polite" }), fd = h("div", { class: "pfb pfd", "aria-live": "polite" });
+  gauche.appendChild(etape); gauche.appendChild(fb);
+  function journaliser(ok, termine) { cb.note({ saisies: saisies.slice(), reussi: ok, fini: termine, prob: JSON.parse(JSON.stringify(etat)) }); }
+  function aide(texte, image, ou) {
+    (ou || fb).appendChild(h("div", { class: "hintbox" }, h("div", { class: "label", text: "💡 " + texte }), image ? schemaImg(bon, "seul") : null));
+  }
+  /* 1. schéma */
+  function choisirSchema() {
+    etape.innerHTML = "";
+    etape.appendChild(h("p", { class: "plabel", text: "1. Quel schéma va avec le problème ?" }));
+    var grille = h("div", { class: "schemas" });
+    P.schemas.forEach(function (sc, i) {
+      var b = h("button", { class: "schema-choix", type: "button", "data-bon": sc.bon ? "1" : "0", "aria-label": "Schéma " + (i + 1) + ". " + sc.alt, onclick: function () {
+        if (etat.schema !== null) return;
+        etat.schema = sc.bon;
+        grille.querySelectorAll(".schema-choix").forEach(function (x) { x.disabled = true; x.classList.add(x.getAttribute("data-bon") === "1" ? "right" : "tried"); });
+        if (!sc.bon) { b.classList.add("faux"); fb.appendChild(h("div", { class: "feedback again", text: "Pas tout à fait. Le bon schéma est en vert." })); aide(P.aide); }
+        journaliser(false, false);
+        choisirOp();
+      } }, schemaImg(sc));
+      grille.appendChild(b);
+    });
+    etape.appendChild(grille);
+  }
+  /* 2. opération */
+  function choisirOp() {
+    droite.innerHTML = "";
+    droite.appendChild(h("p", { class: "plabel", text: (etat.guide ? "2. " : "") + "Quelle opération fais-tu ?" }));
+    var rang = h("div", { class: "ops" });
+    OPS.forEach(function (o) {
+      rang.appendChild(h("button", { class: "opkey", type: "button", "data-op": o, "aria-label": OPS_NOMS[o], text: o, onclick: function (ev) {
+        if (etat.ops.indexOf(o) >= 0 || etat.ops.indexOf(P.op) >= 0) return;
+        etat.ops.push(o);
+        var b = ev.currentTarget;
+        if (o === P.op) { b.classList.add("right"); journaliser(false, false); calculer(); return; }
+        b.classList.add("tried"); b.disabled = true;
+        if (etat.ops.length === 1) {
+          fd.appendChild(h("div", { class: "feedback again", text: "Pas encore… Essaie une autre opération." }));
+          aide(P.aide, !etat.guide, fd);  /* sans l'étape schéma : le schéma s'affiche en aide */
+          journaliser(false, false);
+        } else {
+          fd.appendChild(h("div", { class: "feedback again", text: P.aideOp }));
+          rang.querySelector('[data-op="' + P.op + '"]').classList.add("right");
+          etat.ops.push(P.op); journaliser(false, false); calculer();
+        }
+      } }));
+    });
+    droite.appendChild(rang); droite.appendChild(fd);
+  }
+  /* 3. calcul au pavé */
+  function calculer() {
+    var parts = P.calcul.split(" " + P.op + " ");
+    var disp = h("span", { class: "saisie vide", id: "saisie", "aria-live": "polite", text: "?" });
+    function upd() { disp.textContent = val || "?"; disp.classList.toggle("vide", !val); }
+    var ligne = h("div", { class: "pcalcul" }, h("span", { text: parts[0] + " " + P.op + " " + parts[1] + " = " }), disp, h("span", { class: "unite", text: " " + P.unite }));
+    var pad = h("div", { class: "pad" }, ["1", "2", "3", "4", "5", "6", "7", "8", "9", "", "0", "⌫"].map(function (k) {
+      if (!k) return h("span");
+      return h("button", { class: "padkey" + (k === "⌫" ? " del" : ""), type: "button", "data-k": k, "aria-label": k === "⌫" ? "Effacer" : k, text: k, onclick: function () {
+        if (fini) return;
+        if (k === "⌫") val = val.slice(0, -1); else if (val.length < 6) val = (val === "0" ? "" : val) + k;
+        upd(); } });
+    }));
+    var ok = h("button", { class: "btn primary", type: "button", id: "btn-valider", text: "✓ Valider", onclick: function () {
+      if (fini || !val) return;
+      tries++; saisies.push(val);
+      if (Number(val) === Number(c.reponse)) {
+        fini = true; disp.classList.add("juste");
+        var sansFaute = etat.schema !== false && etat.ops.length === 1 && tries === 1;
+        probNote(P.cas, sansFaute); journaliser(true, true); cb.reussi(tries === 1);
+        fd.innerHTML = "";
+        fd.appendChild(h("div", { class: "feedback good", text: sansFaute ? "Bravo ! ⭐" : "Bravo, tu as trouvé ! 👏" }));
+        var rep = h("div", { class: "card has-say preponse" }, h("div", { class: "label", text: "✍️ Je réponds par une phrase" }), h("p", { class: "phrase", text: P.phrase }));
+        var sb = sayBtn(function () { return [{ text: P.phrase_oral, lang: "fr-FR" }]; }); rep.appendChild(sb);
+        fd.appendChild(rep);
+        if (TTS.auto) TTS.speak([{ text: P.phrase_oral, lang: "fr-FR" }], sb);
+        cb.suite();
+      } else if (tries < 3) {
+        val = ""; upd(); journaliser(false, false);
+        fd.innerHTML = ""; fd.appendChild(h("div", { class: "feedback again", text: "Pas encore… Refais le calcul ! 💪" }));
+      } else {
+        fini = true; probNote(P.cas, false); journaliser(false, true);
+        fd.innerHTML = ""; fd.appendChild(h("div", { class: "feedback again", text: "Le résultat était " + c.reponse + ". " + P.phrase + " On le retravaillera ensemble ! 🌱" }));
+        cb.suite();
+      }
+    } });
+    droite.insertBefore(ligne, fd); droite.insertBefore(pad, fd); droite.insertBefore(h("div", { class: "actions" }, ok), fd);
+  }
+  if (etat.guide) choisirSchema(); else choisirOp();
 }
 
 /* ------------------------------------------------------------ poésie tapée par le parent (texte jamais publié) */
@@ -989,7 +1110,7 @@ function carteModeQuiz() {
 }
 
 /* ------------------------------------------------------------ défi chrono (maths) : 10 calculs, pavé + Entrée, record à battre */
-var DEFI_N = 10, DEFI_PENALITE = 5000, DEFI_EXCLUS = ["multiplication_posee"]; /* posée sur la feuille : pas de chrono */
+var DEFI_N = 10, DEFI_PENALITE = 5000, DEFI_EXCLUS = ["multiplication_posee", "probleme"]; /* posée sur la feuille, ou problème à lire : pas de chrono */
 var DEFI = { timers: [], intervalle: null, touche: null };
 function defiStop() {
   DEFI.timers.forEach(clearTimeout); DEFI.timers = [];
@@ -1352,7 +1473,25 @@ function genererBilan(all, pid, depuis) {
       else qok++; });
     if (qn.length) ok.push("quiz " + qok + "/" + qn.length + " du premier coup");
     /* calculs : chaque calcul manqué au premier essai (les nombres changent d'une séance à l'autre) */
-    var cal = ev.filter(function (e) { return e.k === "calcul"; }), cok = cal.filter(function (e) { return e.reussi && e.saisies.length === 1; }).length;
+    /* problèmes guidés : nature de l'erreur (schéma, opération, calcul) */
+    var pbs = ev.filter(function (e) { return e.k === "calcul" && e.prob; });
+    function probOk(e) { return e.reussi && e.saisies.length === 1 && e.prob.schema !== false && e.prob.ops.length === 1; }
+    pbs.filter(function (e) { return !probOk(e); }).slice(0, 8).forEach(function (e) {
+      var d = [];
+      if (e.prob.schema === false) d.push("schéma faux");
+      if (e.prob.ops.length > 1) d.push("opération : " + e.prob.ops.join(" puis "));
+      if (!e.prob.ops.length) d.push("opération non choisie");
+      if (e.saisies.length && !(e.reussi && e.saisies.length === 1)) d.push("calcul : attendu " + e.attendu + ", saisi " + e.saisies.join(" puis ") + (e.reussi ? "" : " (non trouvé)"));
+      if (e.fini === false) d.push("problème quitté en cours");
+      pb.push("problème (" + e.prob.cas + (e.prob.guide ? ", avec schéma" : ", sans schéma") + ") " + guil(e.consigne) + " : " + d.join(" ; "));
+    });
+    if (pbs.length) {
+      var nS = pbs.filter(function (e) { return e.prob.schema === false; }).length, nO = pbs.filter(function (e) { return e.prob.ops.length > 1; }).length;
+      var nC = pbs.filter(function (e) { return e.saisies.length > 1 || (e.fini && !e.reussi); }).length;
+      var resume = "problèmes " + pbs.filter(probOk).length + "/" + pbs.length + " sans erreur";
+      if (nS + nO + nC) pb.unshift(resume + " (erreurs : schéma " + nS + ", opération " + nO + ", calcul " + nC + ")"); else ok.push(resume);
+    }
+    var cal = ev.filter(function (e) { return e.k === "calcul" && !e.prob; }), cok = cal.filter(function (e) { return e.reussi && e.saisies.length === 1; }).length;
     cal.filter(function (e) { return !(e.reussi && e.saisies.length === 1); }).slice(0, 8).forEach(function (e) {
       pb.push("calcul " + (e.gen ? "(" + e.gen + ") " : e.id + " ") + guil(e.consigne) + " : attendu " + e.attendu + ", saisi " + e.saisies.join(" puis ") +
         (e.reussi ? "" : e.fini === false ? " (calcul quitté en cours)" : e.defi ? "" : " (non trouvé)") + (e.defi ? " (défi chrono)" : ""));

@@ -127,6 +127,117 @@ if num2words:
 else:
     print("  (num2words absent : nombres en lettres non vérifiés)")
 
+
+# ---- problèmes guidés : 1 000 tirages par cas, recalculés de façon indépendante
+import xml.etree.ElementTree as ET
+
+def valeur_schema(sc):
+    """Valeur cachée derrière le « ? », recalculée à partir de la description du schéma."""
+    f, q = sc["f"], (lambda x: x == "?")
+    try:
+        if f == "tout":
+            a, b = sc["parts"]
+            return Fraction(a + b) if q(sc["top"]) else Fraction(sc["top"] - (b if q(a) else a))
+        if f == "cmp":
+            if q(sc["grand"]):
+                return Fraction(sc["petit"] + sc["ecart"])
+            if q(sc["petit"]):
+                return Fraction(sc["grand"] - sc["ecart"])
+            return Fraction(sc["grand"] - sc["petit"])
+        if f == "egal":
+            if q(sc["top"]):
+                return Fraction(sc["n"] * sc["part"])
+            if q(sc["part"]):
+                return Fraction(sc["top"], sc["n"])
+            return Fraction(sc["top"], sc["part"])
+        if f == "fois":
+            return Fraction(sc["petit"] * sc["k"]) if q(sc["grand"]) else Fraction(sc["grand"], sc["k"])
+    except (TypeError, ZeroDivisionError):
+        return None
+    raise ValueError(f)
+
+def connus(sc):
+    if sc["f"] == "tout":
+        v = [sc["top"]] + sc["parts"]
+    elif sc["f"] == "cmp":
+        v = [sc["grand"], sc["petit"], sc["ecart"]]
+    elif sc["f"] == "egal":
+        v = [sc["top"], sc["n"], sc["part"]]
+    else:
+        v = [sc["petit"], sc["grand"]]
+    return [x for x in v if x != "?"]
+
+OP = {"s1_parties": "+", "s1_egales": "×", "s2_complement": "−", "s2_perte": "−", "s2_avant_ajout": "−", "s3_part": "÷",
+      "s3_nombre": "÷", "s4_grande": "+", "s4_petite": "−", "s4_ecart": "−", "s5_fois_plus": "×", "s5_fois_moins": "÷"}
+NP = 1000
+for limite in (999, 9999):
+    JSP = f"""
+require({json.dumps(str(ROOT / "generateurs.js"))});
+const G = globalThis.GENERATEURS, out = [];
+for (const c of G.G.probleme.cas) for (let i = 0; i < {NP}; i++) out.push(Object.assign(G.G.probleme({{problemes: [c], limite: {limite}}}), {{c}}));
+out.push(...G.creer([{{id: "g1", type: "probleme", nombre: 6, ref: ["b1"], params: {{strategies: [4]}}}}]).map(x => Object.assign(x, {{c: "seance"}})));
+process.stdout.write(JSON.stringify({{cas: G.G.probleme.cas, out}}));
+"""
+    res = json.loads(subprocess.run(["node", "-e", JSP], capture_output=True, text=True, check=True).stdout)
+    if sorted(res["cas"]) != sorted(OP):
+        ko(f"problèmes : cas {res['cas']}")
+    vus = {}
+    for it in res["out"]:
+        P, t = it["probleme"], it["consigne"]["texte"]
+        if it["c"] == "seance":
+            if not P["cas"].startswith("s4_"):
+                ko(f"problèmes : stratégie 4 demandée, cas {P['cas']}")
+            continue
+        vus.setdefault(P["cas"], set()).add(t.split(" ")[0] + "…" + str(len(t)))
+        rep = int(it["reponse"])
+        if eval_expr(it["expression"]) != rep or rep < 1 or P["calcul"] != it["expression"]:
+            ko(f"problème {P['cas']} : {it['expression']} ≠ {rep}")
+        if re.search(r" ([+−×÷]) ", it["expression"])[1] != OP[P["cas"]] or P["op"] != OP[P["cas"]]:
+            ko(f"problème {P['cas']} : opération {it['expression']}")
+        bons = [s for s in P["schemas"] if s["bon"]]
+        if len(P["schemas"]) != 3 or len(bons) != 1:
+            ko(f"problème {P['cas']} : {len(bons)} bon(s) schéma(s)")
+            continue
+        if valeur_schema(bons[0]["spec"]) != rep:
+            ko(f"problème {P['cas']} : le bon schéma vaut {valeur_schema(bons[0]['spec'])}, réponse {rep}")
+        specs = [json.dumps(s["spec"], sort_keys=True) for s in P["schemas"]]
+        if len(set(specs)) != 3:
+            ko(f"problème {P['cas']} : schémas identiques")
+        for s in P["schemas"]:
+            if not s["bon"] and valeur_schema(s["spec"]) == rep:
+                ko(f"problème {P['cas']} : un mauvais schéma donne aussi {rep} ({s['spec']})")
+            root = ET.fromstring(s["svg"])
+            if not root.get("viewBox") or "script" in s["svg"] or "href" in s["svg"]:
+                ko(f"problème {P['cas']} : SVG invalide")
+        # nombres de l'énoncé = nombres connus du bon schéma ; bornes
+        nombres = [int(x.replace(" ", "")) for x in re.findall(r"\d{1,3}(?: \d{3})+|\d+", t)]
+        for x in connus(bons[0]["spec"]):
+            if P["cas"] in ("s5_fois_plus", "s5_fois_moins"):
+                break
+            if x not in nombres:
+                ko(f"problème {P['cas']} : {x} du schéma absent de l'énoncé « {t} »")
+        if max(nombres + [rep]) > limite:
+            ko(f"problème {P['cas']} : nombre > {limite} : « {t} »")
+        # rédaction
+        for mauvais in ("undefined", "NaN", "null", "  ", " de A", " de E", " de I", " de O", " de U", "que A", "que E", "que I", "que O", "que U"):
+            if mauvais in t or mauvais in P["phrase"]:
+                ko(f"problème {P['cas']} : « {mauvais} » dans « {t} » / « {P['phrase']} »")
+        if not t.endswith("?") or len([m for m in re.split(r"[.?!]", t) if m.strip()]) > 4:
+            ko(f"problème {P['cas']} : énoncé « {t} »")
+        if any(len(ph.split()) > 22 for ph in re.split(r"(?<=[.?!])\s", t)):
+            ko(f"problème {P['cas']} : phrase trop longue « {t} »")
+        if re.search(r" \?|\d (€|kg|cm|m|L)\b", t + " " + P["phrase"]):
+            ko(f"problème {P['cas']} : espace sécable avant « ? » ou une unité : « {t} »")
+        rf = f"{rep:,}".replace(",", " ")
+        if rf not in P["phrase"].replace("\u00a0", " ") or P["unite"] not in P["phrase"] + " " + t:
+            ko(f"problème {P['cas']} : phrase réponse « {P['phrase']} » ({rep} {P['unite']})")
+        if "€" in it["consigne"]["oral"] or re.search(r"\d (kg|cm|m|L)\b", it["consigne"]["oral"]):
+            ko(f"problème {P['cas']} : unité non lue « {it['consigne']['oral']} »")
+        counts["probleme"] = counts.get("probleme", 0) + 1
+    for c in OP:
+        if len(vus.get(c, ())) < 4:
+            ko(f"problème {c} : contextes peu variés ({len(vus.get(c, ()))})")
+
 print(f"{len(items)} exercices tirés : " + ", ".join(f"{k} {v}" for k, v in sorted(counts.items())))
 print("RÉSULTAT :", "PASS" if not fails else f"FAIL ({len(fails)})")
 sys.exit(1 if fails else 0)

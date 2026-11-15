@@ -169,7 +169,19 @@ Acquis (premier coup)
 
 ---
 
-## Lot 5 : problèmes guidés [DEMANDÉ 15/11/2026] · cadré, à lancer
+## Lot 5 : problèmes guidés [DEMANDÉ 15/11/2026] · LIVRÉ en 1.9.0 (15/11/2026)
+
+> Livré et testé :
+> - `tests/test_generateurs.py` : 1 000 tirages par cas, limite 999 et 9 999. Recalcul indépendant de la réponse et de la valeur de chaque schéma. Un seul bon schéma ; aucun mauvais schéma qui donne la même réponse. Nombres de l'énoncé conformes au schéma et bornés. Rédaction vérifiée : espaces insécables, unités lues en toutes lettres.
+> - `tests/test_problemes.py` : 3 gestes, aide qui s'efface et qui revient, journal, bilan, pas de défi. Copie avec `tests/fixtures/essai_problemes.json`.
+> - Non-régression : `test_app`, `test_quiz` et `test_defi` restent verts.
+>
+> À vérifier sur la tablette : lisibilité des schémas au doigt, en portrait (3 côte à côte) et en paysage (2 + 1) ; lecture à voix haute des unités.
+>
+> Écarts avec le cadrage :
+> - après 2 opérations fausses, la bonne s'affiche et le calcul s'ouvre, pour ne pas bloquer l'enfant ;
+> - le résumé « problèmes x/y sans erreur (erreurs : schéma, opération, calcul) » est placé en tête de « À retravailler » dès qu'il y a une erreur ;
+> - paramètres du schéma de leçon : `strategies`, `problemes` et `limite` (pas `max`, déjà borné à 200 pour `moitie`).
 
 **Besoin.** Résoudre des problèmes est une priorité du programme 2025 du cycle 2, et l'appli n'en propose aucun. Le parent veut un exercice pédagogique sans être trop lourd. Il fournira ensuite le cahier d'exercices de problèmes de l'enfant : il fixera l'ordre des cas à travailler, pas la mécanique.
 

@@ -349,7 +349,8 @@
               "conversion",
               "perimetre",
               "double_moitie",
-              "decomposer_produit"
+              "decomposer_produit",
+              "probleme"
             ]
           },
           "nombre": {
@@ -453,6 +454,45 @@
                   2,
                   3
                 ]
+              },
+              "strategies": {
+                "description": "probleme : stratégies tirées (1 le tout, 2 une partie, 3 un partage, 4 une comparaison, 5 fois plus ou fois moins)",
+                "type": "array",
+                "minItems": 1,
+                "uniqueItems": true,
+                "items": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 5
+                }
+              },
+              "problemes": {
+                "description": "probleme : cas précis tirés (prime sur strategies)",
+                "type": "array",
+                "minItems": 1,
+                "uniqueItems": true,
+                "items": {
+                  "enum": [
+                    "s1_parties",
+                    "s1_egales",
+                    "s2_complement",
+                    "s2_perte",
+                    "s2_avant_ajout",
+                    "s3_part",
+                    "s3_nombre",
+                    "s4_grande",
+                    "s4_petite",
+                    "s4_ecart",
+                    "s5_fois_plus",
+                    "s5_fois_moins"
+                  ]
+                }
+              },
+              "limite": {
+                "description": "probleme : plus grand nombre des problèmes additifs (défaut 999)",
+                "type": "integer",
+                "minimum": 50,
+                "maximum": 9999
               }
             }
           },
@@ -715,8 +755,23 @@
           "description": "Libre : grammaire, conjugaison, numération, le vivant..."
         },
         "theme": {
-          "enum": ["grammaire", "conjugaison", "dictee", "vocabulaire", "poesie",
-                   "nombres", "fractions", "operations", "calcul_mental", "mesures", "heure", "geometrie", "monnaie", "problemes", "donnees"],
+          "enum": [
+            "grammaire",
+            "conjugaison",
+            "dictee",
+            "vocabulaire",
+            "poesie",
+            "nombres",
+            "fractions",
+            "operations",
+            "calcul_mental",
+            "mesures",
+            "heure",
+            "geometrie",
+            "monnaie",
+            "problemes",
+            "donnees"
+          ],
           "description": "Thème de l'accueil (liste fermée, alignée sur le programme de CE2). Français : grammaire, conjugaison, dictee, vocabulaire, poesie. Maths : nombres, fractions, operations, calcul_mental, mesures, heure, geometrie, monnaie, problemes, donnees. Absent pour les autres matières."
         },
         "type_lecon": {
