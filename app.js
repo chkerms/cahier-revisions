@@ -1,7 +1,7 @@
 /* Cahier de révisions : lecteur de leçons chiffrées. Aucune dépendance externe. */
 "use strict";
 (function () {
-var VERSION = "1.10.1";
+var VERSION = "1.11.0";
 var app = document.getElementById("app");
 var nextBar = document.getElementById("next");
 var D = null, IMG = {}, LESSONS = [], VUE = null, CTX = null, PERSO = null; /* CTX : leçon d'origine de la question affichée (quiz transverse) */
@@ -854,7 +854,26 @@ function probleme(c, gauche, droite, cb) {
   /* un problème à deux étapes (P.etapes) : pas de schéma ; question intermédiaire, opération, calcul, puis la question finale */
   var steps = P.etapes && P.etapes.length ? P.etapes : [{ op: P.op, calcul: P.calcul, reponse: c.reponse, aideOp: P.aideOp, question: null }];
   var si = 0, S = steps[0], opsEtape = [], premierCoup = true, faits = [];
-  var etat = { cas: P.cas, guide: steps.length === 1 && probGuide(P.cas), schema: null, ops: [], etapes: steps.length }, saisies = [], val = "", tries = 0, fini = false;
+  /* nops : étapes avec une opération (la dernière d'un problème « seuil » est un choix oui / non) */
+  var nops = steps.filter(function (x) { return !x.ouinon; }).length;
+  var etat = { cas: P.cas, guide: steps.length === 1 && P.schemas.length > 0 && probGuide(P.cas), schema: null, ops: [], etapes: steps.length, nops: nops },
+    saisies = [], val = "", tries = 0, fini = false;
+  function num(x) { return Math.round(parseFloat(String(x).replace(",", ".")) * 100); }
+  /* problème réussi : phrase réponse (avec la blague), étoile si tout est juste du premier coup */
+  function bravo() {
+    fini = true;
+    var sansFaute = etat.schema !== false && etat.ops.length === nops && premierCoup;
+    probNote(P.cas, sansFaute); journaliser(true, true); cb.reussi(premierCoup && etat.ops.length === nops);
+    fd.innerHTML = "";
+    fd.appendChild(h("div", { class: "feedback good", text: sansFaute ? "Bravo ! ⭐" : "Bravo, tu as trouvé ! 👏" }));
+    var lu = P.phrase_oral + (P.blague_oral ? " " + P.blague_oral : "");
+    var rep = h("div", { class: "card has-say preponse" }, h("div", { class: "label", text: "✍️ Je réponds par une phrase" }), h("p", { class: "phrase" }, rich(P.phrase)),
+      P.blague ? h("p", { class: "blague", text: "😄 " + P.blague }) : null);
+    var sb = sayBtn(function () { return [{ text: lu, lang: "fr-FR" }]; }); rep.appendChild(sb);
+    fd.appendChild(rep);
+    if (TTS.auto) TTS.speak([{ text: lu, lang: "fr-FR" }], sb);
+    cb.suite();
+  }
   /* fb : aide du schéma, sous les schémas ; fd : opération, calcul et réponse, sous le pavé */
   var etape = h("div", { class: "petape" }), fb = h("div", { class: "pfb", "aria-live": "polite" }), fd = h("div", { class: "pfb pfd", "aria-live": "polite" });
   gauche.appendChild(etape); gauche.appendChild(fb);
@@ -891,6 +910,23 @@ function probleme(c, gauche, droite, cb) {
         h("div", { class: "label", text: si === 0 ? "D'abord…" : "Ensuite…" }), h("p", { text: S.question }), qs));
       if (TTS.auto && si > 0) TTS.speak([{ text: S.question_oral || S.question, lang: "fr-FR" }], qs);
     }
+    if (S.ouinon) {
+      /* je compare le total au nombre de l'énoncé : un seul essai, la phrase réponse explique */
+      droite.appendChild(h("div", { class: "ops ouinon" }, ["oui", "non"].map(function (x) {
+        return h("button", { class: "btn ouinon-btn", type: "button", "data-ouinon": x, text: x === "oui" ? "👍 Oui" : "👎 Non", onclick: function (ev) {
+          if (fini) return;
+          saisies.push(x);
+          [].forEach.call(ev.currentTarget.parentNode.children, function (b) { b.disabled = true; }); /* un seul essai */
+          if (x === S.reponse) { ev.currentTarget.classList.add("right"); bravo(); return; }
+          fini = true; ev.currentTarget.classList.add("tried"); premierCoup = false; probNote(P.cas, false); journaliser(false, true);
+          fd.innerHTML = ""; fd.appendChild(h("div", { class: "feedback again" }, "Pas tout à fait… ", rich(P.phrase), " On le retravaillera ensemble ! 🌱"));
+          if (TTS.auto) TTS.speak([{ text: "Pas tout à fait. " + P.phrase_oral, lang: "fr-FR" }]);
+          cb.suite();
+        } });
+      })));
+      droite.appendChild(fd);
+      return;
+    }
     droite.appendChild(h("p", { class: "plabel", text: (etat.guide ? "2. " : "") + "Quelle opération fais-tu ?" }));
     var rang = h("div", { class: "ops" });
     OPS.forEach(function (o) {
@@ -925,33 +961,25 @@ function probleme(c, gauche, droite, cb) {
   function calculer() {
     var disp = h("span", { class: "saisie vide", id: "saisie", "aria-live": "polite", text: "?" });
     function upd() { disp.textContent = val || "?"; disp.classList.toggle("vide", !val); }
-    var ligne = h("div", { class: "pcalcul" }, h("span", { text: S.calcul + " = " }), disp, h("span", { class: "unite", text: " " + P.unite }));
-    var pad = h("div", { class: "pad" }, ["1", "2", "3", "4", "5", "6", "7", "8", "9", "", "0", "⌫"].map(function (k) {
+    var ligne = h("div", { class: "pcalcul" }, h("span", null, rich(S.calcul + " = ")), disp, h("span", { class: "unite", text: " " + P.unite }));
+    /* prix avec centimes : touche virgule */
+    var pad = h("div", { class: "pad" }, ["1", "2", "3", "4", "5", "6", "7", "8", "9", P.decimal ? "," : "", "0", "⌫"].map(function (k) {
       if (!k) return h("span");
-      return h("button", { class: "padkey" + (k === "⌫" ? " del" : ""), type: "button", "data-k": k, "aria-label": k === "⌫" ? "Effacer" : k, text: k, onclick: function () {
+      return h("button", { class: "padkey" + (k === "⌫" ? " del" : ""), type: "button", "data-k": k, "aria-label": k === "⌫" ? "Effacer" : k === "," ? "Virgule" : k, text: k, onclick: function () {
         if (fini) return;
-        if (k === "⌫") val = val.slice(0, -1); else if (val.length < 6) val = (val === "0" ? "" : val) + k;
+        if (k === "⌫") val = val.slice(0, -1);
+        else if (k === ",") { if (val && val.indexOf(",") < 0) val += ","; }
+        else if (val.length < 7 && !/,\d\d$/.test(val)) val = (val === "0" ? "" : val) + k;
         upd(); } });
     }));
     var ok = h("button", { class: "btn primary", type: "button", id: "btn-valider", text: "✓ Valider", onclick: function () {
       if (fini || !val) return;
       tries++; saisies.push(val);
-      if (Number(val) === Number(S.reponse)) {
+      if (num(val) === num(S.reponse)) {
         disp.classList.add("juste");
         if (tries > 1) premierCoup = false;
         if (si < steps.length - 1) { journaliser(false, false); etapeSuivante(true); return; }
-        fini = true;
-        var sansFaute = etat.schema !== false && etat.ops.length === steps.length && premierCoup;
-        probNote(P.cas, sansFaute); journaliser(true, true); cb.reussi(premierCoup && etat.ops.length === steps.length);
-        fd.innerHTML = "";
-        fd.appendChild(h("div", { class: "feedback good", text: sansFaute ? "Bravo ! ⭐" : "Bravo, tu as trouvé ! 👏" }));
-        var lu = P.phrase_oral + (P.blague_oral ? " " + P.blague_oral : "");
-        var rep = h("div", { class: "card has-say preponse" }, h("div", { class: "label", text: "✍️ Je réponds par une phrase" }), h("p", { class: "phrase", text: P.phrase }),
-          P.blague ? h("p", { class: "blague", text: "😄 " + P.blague }) : null);
-        var sb = sayBtn(function () { return [{ text: lu, lang: "fr-FR" }]; }); rep.appendChild(sb);
-        fd.appendChild(rep);
-        if (TTS.auto) TTS.speak([{ text: lu, lang: "fr-FR" }], sb);
-        cb.suite();
+        bravo();
       } else if (tries < 3) {
         val = ""; upd(); journaliser(false, false); premierCoup = false;
         fd.innerHTML = ""; fd.appendChild(h("div", { class: "feedback again", text: "Pas encore… Refais le calcul ! 💪" }));
@@ -959,7 +987,7 @@ function probleme(c, gauche, droite, cb) {
         premierCoup = false; journaliser(false, false); etapeSuivante(false);
       } else {
         fini = true; probNote(P.cas, false); journaliser(false, true);
-        fd.innerHTML = ""; fd.appendChild(h("div", { class: "feedback again", text: "Le résultat était " + fmtNb(S.reponse) + ". " + P.phrase + " On le retravaillera ensemble ! 🌱" }));
+        fd.innerHTML = ""; fd.appendChild(h("div", { class: "feedback again" }, "Le résultat était " + fmtNb(S.reponse) + ". ", rich(P.phrase), " On le retravaillera ensemble ! 🌱"));
         cb.suite();
       }
     } });
@@ -1161,13 +1189,20 @@ function problemesDispo() { return !!(window.GENERATEURS && window.GENERATEURS.G
 /* réglages par défaut : nombres jusqu'à 1 000 et pas de division (la classe n'en fait pas encore) */
 function probLimite() { return reglagesProfil().prob_limite === 9999 ? 9999 : 999; }
 function probDivision() { return !!reglagesProfil().prob_division; }
+function probCentimes() { return !!reglagesProfil().prob_centimes; }
+function probFractions() { return !!reglagesProfil().prob_fractions; }
 function tirerCasProblemes() {
-  var G = window.GENERATEURS.G, sansDiv = probDivision() ? [] : G.probleme.division || [], parS = {};
+  var G = window.GENERATEURS.G, sansDiv = (probDivision() ? [] : G.probleme.division || []).concat(probFractions() ? [] : G.probleme.fractions || []), parS = {};
   var cas = G.probleme.cas.filter(function (c) { return sansDiv.indexOf(c) < 0; });
   cas.forEach(function (c) { var k = c.slice(0, 2); (parS[k] = parS[k] || []).push(c); });
+  /* les cas qui ont un énoncé personnel sont tirés une fois sur deux dans leur stratégie : sinon, avec beaucoup de cas, ils se font rares */
+  var perso = ((PERSO || {}).problemes || []).map(function (e) { return e.cas; });
+  function choisir(t) { var m = t.filter(function (c) { return perso.indexOf(c) >= 0; }); return m.length && Math.random() < 0.5 ? pick(m) : pick(t); }
   var deux = parS.e2 || [], nb2 = Math.min(deux.length, Math.random() < 0.5 ? 1 : 2);
-  var un = shuffle(Object.keys(parS).filter(function (k) { return k !== "e2"; })).slice(0, PROB_N - nb2).map(function (k) { return pick(parS[k]); });
-  return shuffle(un.concat(shuffle(deux).slice(0, nb2)));
+  var un = shuffle(Object.keys(parS).filter(function (k) { return k !== "e2"; })).slice(0, PROB_N - nb2).map(function (k) { return choisir(parS[k]); });
+  var d2 = [];
+  while (d2.length < nb2) { var c = choisir(deux.filter(function (x) { return d2.indexOf(x) < 0; })); d2.push(c); }
+  return shuffle(un.concat(d2));
 }
 function pick(t) { return t[Math.floor(Math.random() * t.length)]; }
 function openProblemes() {
@@ -1175,7 +1210,7 @@ function openProblemes() {
   var lim = probLimite();
   chargerLecon({ _probs: true, meta: { id: "problemes", titre: "💡 Problèmes", matiere: "mathematiques" }, parcours: ["calculs"],
     lecon: { blocs: [] }, images: [], styles: {}, calculs: [],
-    generateurs: tirerCasProblemes().map(function (c, i) { return { id: "p" + (i + 1), type: "probleme", nombre: 1, ref: [], params: { problemes: [c], limite: lim } }; }) });
+    generateurs: tirerCasProblemes().map(function (c, i) { return { id: "p" + (i + 1), type: "probleme", nombre: 1, ref: [], params: { problemes: [c], limite: lim, centimes: probCentimes(), fractions: probFractions() } }; }) });
   state = { step: 0, done: {}, stars: 0 };
   journal.debut(D, "problemes");
   render();
@@ -1201,6 +1236,12 @@ function carteProblemes() {
       var on = probDivision() === x[0];
       return h("button", { class: "btn" + (on ? " primary" : ""), type: "button", "data-prob-division": x[0] ? "1" : "0", "aria-pressed": on ? "true" : "false", text: x[1],
         onclick: function () { setReglagesProfil({ prob_division: x[0] }); renderParent("Problèmes : division " + (x[0] ? "activée." : "écartée.")); } });
+    })),
+    h("div", { class: "label", text: "Aussi" }),
+    h("div", { class: "actions" }, [["prob_centimes", "Prix avec des centimes"], ["prob_fractions", "Fraction qui reste"]].map(function (x) {
+      var on = !!r[x[0]];
+      return h("button", { class: "btn" + (on ? " primary" : ""), type: "button", "data-prob-option": x[0], "aria-pressed": on ? "true" : "false", text: (on ? "✓ " : "") + x[1],
+        onclick: function () { var o = {}; o[x[0]] = !on; setReglagesProfil(o); renderParent("Problèmes : « " + x[1] + " » " + (on ? "désactivé." : "activé.")); } });
     })),
     h("p", { class: "parentnote", id: "perso-etat", text: perso }));
 }
@@ -1576,18 +1617,19 @@ function genererBilan(all, pid, depuis) {
     /* problèmes guidés : nature de l'erreur (schéma, opération, calcul) */
     var pbs = ev.filter(function (e) { return e.k === "calcul" && e.prob; });
     function nbE(e) { return e.prob.etapes || 1; }
-    function probOk(e) { return e.reussi && e.saisies.length === nbE(e) && e.prob.schema !== false && e.prob.ops.length === nbE(e); }
+    function nOps(e) { return e.prob.nops != null ? e.prob.nops : nbE(e); }
+    function probOk(e) { return e.reussi && e.saisies.length === nbE(e) && e.prob.schema !== false && e.prob.ops.length === nOps(e); }
     pbs.filter(function (e) { return !probOk(e); }).slice(0, 8).forEach(function (e) {
       var d = [];
       if (e.prob.schema === false) d.push("schéma faux");
-      if (e.prob.ops.length > nbE(e)) d.push("opération : " + e.prob.ops.join(" puis "));
+      if (e.prob.ops.length > nOps(e)) d.push("opération : " + e.prob.ops.join(" puis "));
       if (!e.prob.ops.length) d.push("opération non choisie");
       if (e.saisies.length && !(e.reussi && e.saisies.length === nbE(e))) d.push("calcul : attendu " + e.attendu + ", saisi " + e.saisies.join(" puis ") + (e.reussi ? "" : " (non trouvé)"));
       if (e.fini === false) d.push("problème quitté en cours");
       pb.push("problème (" + e.prob.cas + (nbE(e) > 1 ? ", deux étapes" : e.prob.guide ? ", avec schéma" : ", sans schéma") + ") " + guil(e.consigne) + " : " + d.join(" ; "));
     });
     if (pbs.length) {
-      var nS = pbs.filter(function (e) { return e.prob.schema === false; }).length, nO = pbs.filter(function (e) { return e.prob.ops.length > nbE(e); }).length;
+      var nS = pbs.filter(function (e) { return e.prob.schema === false; }).length, nO = pbs.filter(function (e) { return e.prob.ops.length > nOps(e); }).length;
       var nC = pbs.filter(function (e) { return e.saisies.length > nbE(e) || (e.fini && !e.reussi); }).length;
       var resume = "problèmes " + pbs.filter(probOk).length + "/" + pbs.length + " sans erreur";
       if (nS + nO + nC) pb.unshift(resume + " (erreurs : schéma " + nS + ", opération " + nO + ", calcul " + nC + ")"); else ok.push(resume);

@@ -278,7 +278,10 @@ function valeurSchema(s) {
   else if (s.f === "fois") v = q(s.grand) ? s.petit * s.k : s.grand / s.k;
   return v;
 }
-function lab(x) { return x === "?" ? "?" : fmt(x); }
+/* prix avec centimes : les montants sont en centimes (multiples de 5), affichés « 19,95 » ou « 8 » */
+function euros(c) { var e = Math.floor(c / 100), r = c % 100; return fmt(e) + (r ? "," + (r < 10 ? "0" : "") + r : ""); }
+var LAB = null; /* étiquettes des schémas pendant un problème en centimes : valeur → « 19,95 » */
+function lab(x) { return x === "?" ? "?" : LAB && LAB[x] !== undefined ? LAB[x] : fmt(x); }
 function rectT(x, y, w, hh, txt, inconnu) {
   return '<rect x="' + x.toFixed(1) + '" y="' + y + '" width="' + w.toFixed(1) + '" height="' + hh + '" rx="4" fill="' + (inconnu ? "#ffe08a" : "#ffffff") +
     '" stroke="#1f3c88" stroke-width="2.5"/>' + (txt === "" ? "" : '<text x="' + (x + w / 2).toFixed(1) + '" y="' + (y + hh / 2 + 7) +
@@ -369,7 +372,7 @@ function petitFacteur(p) { var t = (p.tables || []).filter(function (x) { return
 
 /* chaque cas : nombres(p) → objet n ; textes : [énoncé, unité, phrase(r)] selon le contexte */
 var CAS = {
-  s1_parties: { s: 1, op: "+", aide: "Je cherche le tout : le ? est sur la grande barre, au-dessus des deux parties.",
+  s1_parties: { s: 1, op: "+", argent: ["a", "b", "r"], aide: "Je cherche le tout : le ? est sur la grande barre, au-dessus des deux parties.",
     aideOp: "Je cherche le tout avec des parties différentes : je fais une addition.",
     nombres: function (p, lim, o) { var x = deuxParties(lim, o.min); return { a: x[0], b: x[1], r: x[2] }; },
     expr: function (n) { return n.a + " + " + n.b; },
@@ -379,6 +382,8 @@ var CAS = {
       [function (n, P) { return [P[0] + " a " + n.a + " images dans son album et " + n.b + " images dans sa boîte. Combien d'images a-t-" + il(P) + " en tout ?", "images", P[0] + " a " + n.r + " images en tout."]; }, { max: 500 }],
       [function (n, P) { return ["Dans un jeu vidéo, " + P[0] + " gagne " + n.a + " points au premier niveau et " + n.b + " points au deuxième niveau. Combien de points a-t-" + il(P) + " au total ?", "points", P[0] + " a " + n.r + " points au total."]; }, { max: 9999 }],
       [function (n) { return ["En janvier, la bibliothèque prête " + n.a + " livres. En février, elle en prête " + n.b + ". Combien de livres prête-t-elle en deux mois ?", "livres", "La bibliothèque prête " + n.r + " livres en deux mois."]; }, { max: 9999 }],
+      [function (n) { var Pa = unParent(); return ["Au marché, " + Pa[0] + " achète des pommes pour " + n.a + " € et du fromage pour " + n.b + " €. Combien paie-t-" + il(Pa) + " ?", "€", cap(Pa[0]) + " paie " + n.r + " €."]; }, { centimes: true, max: 60 }],
+      [function (n) { return ["Le camion pèse " + n.a + " kg. Sa remorque pèse " + n.b + " kg. Combien pèsent-ils ensemble ?", "kg", "Ils pèsent " + n.r + " kg ensemble."]; }, { max: 9999, min: 400 }],
       [function (n) { return ["Un vélo coûte " + n.a + " € et un casque coûte " + n.b + " €. Combien faut-il payer pour les deux ?", "€", "Il faut payer " + n.r + " €."]; }, { max: 999 }]
     ] },
   s1_egales: { s: 1, op: "×", aide: "Je cherche le tout : il est fait de parts toutes pareilles.",
@@ -391,6 +396,7 @@ var CAS = {
       [function (n, P) { return [P[0] + " achète " + n.n + " paquets de " + n.b + " cartes. Combien de cartes a-t-" + il(P) + " en tout ?", "cartes", P[0] + " a " + n.r + " cartes en tout."]; }, { f: function () { return Math.random() < 0.7 ? rnd(3, 12) : 10 * rnd(2, 5); } }],
       [function (n) { return ["Dans la classe, il y a " + n.n + " tables. Sur chaque table, il y a " + n.b + " crayons. Combien de crayons y a-t-il en tout ?", "crayons", "Il y a " + n.r + " crayons en tout."]; }, { f: function () { return rnd(2, 8); } }],
       [function (n, P) { return [P[0] + " fait " + n.n + " tours de piste. Un tour mesure " + n.b + " m. Combien de mètres court-" + il(P) + " ?", "m", P[0] + " court " + n.r + " m."]; }, { f: function () { return Math.random() < 0.5 ? 10 * rnd(5, 9) : 100 * rnd(1, 4); } }],
+      [function (n) { var Pa = unParent(); return [cap(Pa[0]) + " achète " + n.n + " billets de train. Un billet coûte " + n.b + " €. Combien paie-t-" + il(Pa) + " ?", "€", cap(Pa[0]) + " paie " + n.r + " €."]; }, { f: function () { return rnd(13, 99); } }],
       [function (n) { return ["Le cuisinier prend " + n.n + " boîtes. Chaque boîte contient " + n.b + " œufs. Combien d'œufs a-t-il ?", "œufs", "Le cuisinier a " + n.r + " œufs."]; }, { f: function () { return pick([6, 10, 12]); } }]
     ] },
   s1_trois: { s: 1, op: "+", aide: "Je cherche le tout : le ? est sur la grande barre, au-dessus des trois parties.",
@@ -427,9 +433,10 @@ var CAS = {
       [function (n) { return ["Dans le bac, il y a " + n.t + " ballons. " + n.a + " ballons sont rouges, les autres sont jaunes. Combien de ballons sont jaunes ?", "ballons", n.r + " ballons sont jaunes."]; }, { max: 100 }],
       [function (n, P) { return ["Un livre a " + n.t + " pages. " + P[0] + " a déjà lu " + n.a + " pages. Combien de pages lui reste-t-il à lire ?", "pages", "Il lui reste " + n.r + " pages à lire."]; }, { max: 400 }],
       [function (n, P) { return [P[0] + " veut un jeu à " + n.t + " €. " + Il(P) + " a déjà " + n.a + " €. Combien d'euros lui manque-t-il ?", "€", "Il lui manque " + n.r + " €."]; }, { max: 300 }],
-      [function (n) { return ["Le stade a " + n.t + " places. " + n.a + " supporters sont déjà assis. Combien de places sont encore libres ?", "places", n.r + " places sont encore libres."]; }, { max: 9999, min: 100 }]
+      [function (n) { return ["Le stade a " + n.t + " places. " + n.a + " supporters sont déjà assis. Combien de places sont encore libres ?", "places", n.r + " places sont encore libres."]; }, { max: 9999, min: 100 }],
+      [function (n) { return ["Le train doit parcourir " + n.t + " km. Il a déjà parcouru " + n.a + " km. Combien de kilomètres lui reste-t-il à parcourir ?", "km", "Il lui reste " + n.r + " km à parcourir."]; }, { max: 9999, min: 100 }]
     ] },
-  s2_perte: { s: 2, op: "−", aide: "Au début, j'avais le tout. Une partie est partie : le ? est sur ce qui reste.",
+  s2_perte: { s: 2, op: "−", argent: ["t", "a", "r"], aide: "Au début, j'avais le tout. Une partie est partie : le ? est sur ce qui reste.",
     aideOp: "Je cherche ce qui reste : je fais une soustraction.",
     nombres: function (p, lim, o) { var x = deuxParties(lim, o.min); return { t: x[2], a: x[0], r: x[1] }; },
     expr: function (n) { return n.t + " − " + n.a; },
@@ -438,7 +445,42 @@ var CAS = {
       [function (n, P) { return [P[0] + " a " + n.t + " € dans sa tirelire. " + Il(P) + " dépense " + n.a + " € pour un livre. Combien d'euros lui reste-t-il ?", "€", "Il lui reste " + n.r + " €."]; }, { max: 300 }],
       [function (n) { return ["Le fermier ramasse " + n.t + " œufs. En chemin, " + n.a + " œufs se cassent. Combien d'œufs reste-t-il ?", "œufs", "Il reste " + n.r + " œufs."]; }, { max: 200 }],
       [function (n, P) { return ["Une ficelle mesure " + n.t + " cm. " + P[0] + " en coupe " + n.a + " cm. Combien de centimètres de ficelle reste-t-il ?", "cm", "Il reste " + n.r + " cm de ficelle."]; }, { max: 999 }],
+      [function (n, P) { return [P[0] + " a " + n.t + " € dans son porte-monnaie. " + Il(P) + " achète un goûter à " + n.a + " €. Combien d'argent lui reste-t-il ?", "€", "Il lui reste " + n.r + " €."]; }, { centimes: true, max: 30 }],
+      [function (n) { return ["Le club de foot a " + n.t + " € dans sa caisse. Il paie " + n.a + " € pour des maillots. Combien d'argent reste-t-il dans la caisse ?", "€", "Il reste " + n.r + " € dans la caisse."]; }, { max: 9999, min: 300 }],
       [function (n) { return ["Le boulanger a fait " + n.t + " croissants. Il en vend " + n.a + " le matin. Combien de croissants lui reste-t-il ?", "croissants", "Il lui reste " + n.r + " croissants."]; }, { max: 300 }]
+    ] },
+  s2_trois: { s: 2, op: "−", aide: "Je connais le tout et deux parties : le ? est sur la troisième partie.",
+    aideOp: "Je cherche la partie qui manque : j'enlève au tout les deux parties connues, je fais une soustraction.",
+    nombres: function (p, lim, o) { var x = troisParties(lim, o.min); return { t: x[3], a: x[0], b: x[1], r: x[2] }; },
+    expr: function (n) { return n.t + " − " + n.a + " − " + n.b; },
+    schemas: function (n) { return [{ f: "tout", top: n.t, parts: [n.a, n.b, "?"] }, { f: "tout", top: "?", parts: [n.a, n.b, n.t] }, { f: "cmp", grand: n.t, petit: n.a, ecart: "?" }]; },
+    ctx: [
+      [function (n, P) { return [P[0] + " a " + n.t + " images : " + n.a + " de chats, " + n.b + " de chiens et les autres de chevaux. Combien d'images de chevaux a-t-" + il(P) + " ?", "images", P[0] + " a " + n.r + " images de chevaux."]; }, { max: 500 }],
+      [function (n) { return ["Une randonnée de " + n.t + " km dure trois jours. Le premier jour, on marche " + n.a + " km. Le deuxième jour, " + n.b + " km. Combien de kilomètres reste-t-il pour le troisième jour ?", "km", "Il reste " + n.r + " km pour le troisième jour."]; }, { max: 99, min: 8 }],
+      [function (n, P) { return ["Le collier de " + P[0] + " a " + n.t + " perles : " + n.a + " rouges, " + n.b + " vertes et les autres jaunes. Combien de perles jaunes y a-t-il ?", "perles", "Il y a " + n.r + " perles jaunes."]; }, { max: 300 }],
+      [function (n) { return ["À la course de l'école, " + n.t + " enfants courent : " + n.a + " en CP, " + n.b + " en CE1, et les autres en CE2. Combien d'enfants de CE2 courent ?", "enfants", n.r + " enfants de CE2 courent."]; }, { max: 200, min: 15 }],
+      [function (n) { return ["Au jeu de l'oie géant, il faut " + n.t + " points pour gagner. L'équipe bleue a marqué " + n.a + " points, puis " + n.b + " points. Combien de points lui manque-t-il ?", "points", "Il lui manque " + n.r + " points."]; }, { max: 999, min: 20 }]
+    ] },
+  s4_moins: { s: 4, op: "−", argent: ["g", "e", "r"], aide: "Je cherche la plus petite quantité : « de moins », le ? est sur la petite barre.",
+    aideOp: "« De moins » : je cherche la plus petite quantité, je fais une soustraction.",
+    nombres: function (p, lim, o) { var x = deuxParties(lim, o.min); return { g: x[2], e: Math.min(x[0], x[1]), r: Math.max(x[0], x[1]) }; },
+    expr: function (n) { return n.g + " − " + n.e; },
+    schemas: function (n) { return [{ f: "cmp", grand: n.g, petit: "?", ecart: n.e }, { f: "cmp", grand: "?", petit: n.g, ecart: n.e }, { f: "tout", top: "?", parts: [n.g, n.e] }]; },
+    ctx: [
+      [function (n, P) { return [P[0] + " a " + n.g + " billes. " + P[1][0] + " en a " + n.e + " de moins. Combien de billes a " + P[1][0] + " ?", "billes", P[1][0] + " a " + n.r + " billes."]; }, { max: 300 }],
+      [function (n) { return ["Le grand bus transporte " + n.g + " passagers. Le petit bus en transporte " + n.e + " de moins. Combien de passagers transporte le petit bus ?", "passagers", "Le petit bus transporte " + n.r + " passagers."]; }, { max: 99 }],
+      [function (n) { return ["Un vélo coûte " + n.g + " €. Une trottinette coûte " + n.e + " € de moins. Combien coûte la trottinette ?", "€", "La trottinette coûte " + n.r + " €."]; }, { max: 999 }],
+      [function (n) { return ["Le chemin rouge mesure " + n.g + " m. Le chemin bleu mesure " + n.e + " m de moins. Combien mesure le chemin bleu ?", "m", "Le chemin bleu mesure " + n.r + " m."]; }, { max: 9999 }],
+      [function (n, P) { return [P[0] + " a " + n.g + " € dans sa tirelire. " + P[1][0] + " a " + n.e + " € de moins. Combien d'argent a " + P[1][0] + " ?", "€", P[1][0] + " a " + n.r + " €."]; }, { centimes: true, max: 60 }]
+    ] },
+  /* la fraction qui reste : le tout, c'est d/d ; pas d'étape schéma ; on écrit le nombre de parts qui restent (« 2 » cinquièmes) */
+  s2_fraction: { s: 2, frac: true, op: "−",
+    nombres: function () { var d = rnd(3, 10), a = rnd(1, d - 1); return { d: d, a: a, r: d - a }; },
+    ctx: [
+      [function (n, P) { return [P[0] + " a mangé " + F(n.a, n.d) + " de la tarte. Quelle fraction de la tarte reste-t-il ?", "de la tarte"]; }, {}],
+      [function (n) { return ["Le jardinier a déjà planté " + F(n.a, n.d) + " du potager. Quelle fraction du potager reste-t-il à planter ?", "du potager"]; }, {}],
+      [function (n, P) { return [P[0] + " a lu " + F(n.a, n.d) + " de son livre. Quelle fraction du livre lui reste-t-il à lire ?", "du livre"]; }, {}],
+      [function (n) { var D = doudou(); return [cap(D[0]) + " a mangé " + F(n.a, n.d) + " de son poisson. Quelle fraction du poisson reste-t-il ?", "du poisson", "Il garde le reste pour le goûter !"]; }, {}]
     ] },
   s2_avant_ajout: { s: 2, op: "−", aide: "Le tout, c'est maintenant. On a ajouté une partie : le ? est sur ce qu'il y avait avant.",
     aideOp: "Je cherche ce qu'il y avait avant l'ajout : je fais une soustraction.",
@@ -454,7 +496,7 @@ var CAS = {
   s3_part: { s: 3, op: "÷", aide: "Je partage le tout en parts égales : le ? est sur chaque part.",
     aideOp: "Je fais un partage et je cherche la valeur d'une part : je fais une division.",
     nombres: function (p, lim, o) {
-      if (o && o.grand) { var k2 = pick([2, 4, 5, 10]), q2 = 5 * rnd(10, 60); return { t: k2 * q2, k: k2, r: q2 }; } /* 1 020 ÷ 4 : par la décomposition */
+      if (o && o.grand) { var k2 = pick([2, 2, 4, 5, 10]), q2 = k2 === 2 ? rnd(51, 499) : 5 * rnd(10, 60); return { t: k2 * q2, k: k2, r: q2 }; } /* 1 020 ÷ 4, 436 ÷ 2 : par la décomposition */
       var k = facteur(p), q = rnd(2, 10); return { t: k * q, k: k, r: q }; },
     expr: function (n) { return n.t + " ÷ " + n.k; },
     schemas: function (n) { return [{ f: "egal", top: n.t, n: n.k, part: "?" }, { f: "egal", top: "?", n: n.k, part: n.t }, { f: "tout", top: n.t, parts: [n.k, "?"] }]; },
@@ -468,16 +510,17 @@ var CAS = {
     ] },
   s3_nombre: { s: 3, op: "÷", aide: "Je fais des parts toutes pareilles : le ? est sur le nombre de parts.",
     aideOp: "Je fais un partage et je cherche le nombre de parts : je fais une division.",
-    nombres: function (p, lim, o) { var b = o.t ? pick(o.t) : facteur(p), q = rnd(2, 10); return { t: b * q, b: b, r: q }; },
+    nombres: function (p, lim, o) { var b = o.t ? pick(o.t) : facteur(p), q = o.grand ? pick([rnd(11, 30), 10 * rnd(2, 5)]) : rnd(2, 10); return { t: b * q, b: b, r: q }; },
     expr: function (n) { return n.t + " ÷ " + n.b; },
     schemas: function (n) { return [{ f: "egal", top: n.t, n: "?", part: n.b }, { f: "egal", top: "?", n: n.b, part: n.t }, { f: "tout", top: n.t, parts: [n.b, "?"] }]; },
     ctx: [
       [function (n, P) { return [P[0] + " a " + n.t + " photos. " + Il(P) + " en colle " + n.b + " sur chaque page. Combien de pages remplit-" + il(P) + " ?", "pages", P[0] + " remplit " + n.r + " pages."]; }, {}],
       [function (n) { return ["Le jardinier a " + n.t + " graines. Il met " + n.b + " graines dans chaque pot. Combien de pots remplit-il ?", "pots", "Le jardinier remplit " + n.r + " pots."]; }, {}],
       [function (n) { return ["Avec " + n.t + " enfants, on forme des équipes de " + n.b + " joueurs. Combien d'équipes peut-on former ?", "équipes", "On peut former " + n.r + " équipes."]; }, {}],
+      [function (n) { var Pa = unParent(); return ["Avec " + n.t + " €, " + Pa[0] + " achète des places de cinéma à " + n.b + " € chacune. Combien de places peut-" + il(Pa) + " acheter ?", "places", cap(Pa[0]) + " peut acheter " + n.r + " places."]; }, { grand: true, t: [4, 5, 6, 8, 10] }],
       [function (n, P) { return [P[0] + " range " + n.t + " œufs dans des boîtes de " + n.b + " œufs. Combien de boîtes remplit-" + il(P) + " ?", "boîtes", P[0] + " remplit " + n.r + " boîtes."]; }, { t: [6, 10, 12] }]
     ] },
-  s4_grande: { s: 4, op: "+", aide: "Je cherche la plus grande quantité : le ? est sur la grande barre.",
+  s4_grande: { s: 4, op: "+", argent: ["a", "e", "r"], aide: "Je cherche la plus grande quantité : le ? est sur la grande barre.",
     aideOp: "Je cherche la plus grande quantité : j'ajoute l'écart, je fais une addition.",
     nombres: function (p, lim, o) { var x = deuxParties(lim, o.min); return { a: Math.max(x[0], x[1]), e: Math.min(x[0], x[1]), r: x[2] }; },
     expr: function (n) { return n.a + " + " + n.e; },
@@ -486,6 +529,7 @@ var CAS = {
     ctx: [
       [function (n, P) { return ["La tour de " + P[0] + " mesure " + n.a + " cm. La tour de " + P[1][0] + " mesure " + n.e + " cm de plus. Combien mesure la tour de " + P[1][0] + " ?", "cm", "La tour de " + P[1][0] + " mesure " + n.r + " cm."]; }, { max: 300 }],
       [function (n, P) { return ["Aux fléchettes, " + P[0] + " marque " + n.a + " points. " + P[1][0] + " marque " + n.e + " points de plus que " + lui(P) + ". Combien de points marque " + P[1][0] + " ?", "points", P[1][0] + " marque " + n.r + " points."]; }, { max: 500 }],
+      [function (n) { return ["Un livre coûte " + n.a + " €. Un jeu coûte " + n.e + " € de plus. Combien coûte le jeu ?", "€", "Le jeu coûte " + n.r + " €."]; }, { centimes: true, max: 60 }],
       [function (n) { return ["Un sac de pommes pèse " + n.a + " kg. Un sac de patates pèse " + n.e + " kg de plus. Combien pèse le sac de patates ?", "kg", "Le sac de patates pèse " + n.r + " kg."]; }, { max: 60 }],
       [function (n, P) { return ["Le livre de " + P[0] + " a " + n.a + " pages. Le livre de " + P[1][0] + " a " + n.e + " pages de plus. Combien de pages a le livre de " + P[1][0] + " ?", "pages", "Le livre de " + P[1][0] + " a " + n.r + " pages."]; }, { max: 400 }]
     ] },
@@ -511,7 +555,7 @@ var CAS = {
       [function (n) { return ["Un jeu coûte " + n.g + " €. Un ballon coûte " + n.p + " €. Combien d'euros le jeu coûte-t-il de plus que le ballon ?", "€", "Le jeu coûte " + n.r + " € de plus que le ballon."]; }, { max: 300 }],
       [function (n, P) { return ["L'école de " + P[0] + " a " + n.g + " élèves. L'école de " + P[1][0] + " a " + n.p + " élèves. Combien d'élèves l'école de " + P[0] + " a-t-elle de plus ?", "élèves", "L'école de " + P[0] + " a " + n.r + " élèves de plus."]; }, { max: 900, min: 120 }]
     ] },
-  s5_fois_plus: { s: 5, op: "×", piege: true, aide: "Je cherche la grande quantité : elle fait plusieurs fois la petite.",
+  s5_fois_plus: { s: 5, op: "×", piege: true, argent: ["a", "r"], aide: "Je cherche la grande quantité : elle fait plusieurs fois la petite.",
     aideOp: "« Fois plus » : je cherche la plus grande quantité, je fais une multiplication.",
     nombres: function (p, lim, o) { var k = petitFacteur(p), a = o.f(); return { a: a, k: k, r: a * k }; },
     expr: function (n) { return n.a + " × " + n.k; },
@@ -519,6 +563,8 @@ var CAS = {
     ctx: [
       [function (n, P) { return [P[0] + " a " + n.a + " autocollants. " + P[1][0] + " en a " + fois(n.k) + " plus. Combien d'autocollants a " + P[1][0] + " ?", "autocollants", P[1][0] + " a " + n.r + " autocollants."]; }, { f: function () { return Math.random() < 0.7 ? rnd(3, 12) : 10 * rnd(2, 5); } }],
       [function (n) { return ["La petite tour mesure " + n.a + " cm. La grande tour est " + fois(n.k) + " plus haute. Combien mesure la grande tour ?", "cm", "La grande tour mesure " + n.r + " cm."]; }, { f: function () { return rnd(5, 30); } }],
+      [function (n) { return ["Un stylo coûte " + n.a + " €. Une boîte de peinture coûte " + fois(n.k) + " plus cher. Combien coûte la boîte de peinture ?", "€", "La boîte de peinture coûte " + n.r + " €."]; }, { centimes: true, f: function () { return rnd(12, 120); } }],
+      [function (n) { return ["Le petit camion transporte " + n.a + " kg de sable. Le gros camion en transporte " + fois(n.k) + " plus. Combien de kilos transporte le gros camion ?", "kg", "Le gros camion transporte " + n.r + " kg de sable."]; }, { f: function () { return rnd(120, 2400); } }],
       [function (n) { return ["Un crayon coûte " + n.a + " €. Une trousse coûte " + fois(n.k) + " plus cher. Combien coûte la trousse ?", "€", "La trousse coûte " + n.r + " €."]; }, { f: function () { return rnd(2, 5); } }],
       [function (n, P) { return [P[0] + " court " + n.a + " m. " + P[1][0] + " court " + fois(n.k) + " plus loin. Combien de mètres court " + P[1][0] + " ?", "m", P[1][0] + " court " + n.r + " m."]; }, { f: function () { return 10 * rnd(2, 9); } }]
     ] },
@@ -614,15 +660,34 @@ var CAS2 = {
         "poissons", "Il y a " + n.r + " poissons dans chaque seau.", null, "Combien de poissons a-t-" + il(D) + " pêchés en tout ?"]; }, {}]
     ] }
 };
+/* seuil : un total, puis « Oui ou non ? » (assez d'argent, trop lourd, assez de places) ; ctx → [énoncé, unité, phrase si oui, phrase si non, question intermédiaire, sens] */
+CAS2.e2_seuil = { s: 9, seuil: true, aides: ["D'abord, je cherche le total : je fais une addition.", "Ensuite, je compare le total au nombre de l'énoncé."],
+  nombres: function (p, lim, o) { var m = o.min || 5;
+    for (;;) { var a = o.a ? o.a() : rnd(m, Math.floor(lim / 2)), b = o.b ? o.b() : rnd(m, Math.floor(lim / 2)), s1 = a + b, S = Math.round(s1 * (Math.random() < 0.5 ? rnd(80, 95) : rnd(105, 120)) / 100);
+      if (S !== s1 && S <= lim && s1 <= lim && S > Math.max(a, b)) return { a: a, b: b, s: s1, S: S, r: s1 }; } },
+  etapes: function (n) { return [{ op: "+", expr: n.a + " + " + n.b, r: n.s }]; },
+  ctx: [
+    [function (n, P) { var Pa = unParent(); return [P[0] + " a " + n.a + " € dans sa tirelire. " + cap(Pa[0]) + " lui donne " + n.b + " €. Le jeu qu'" + il(P) + " veut coûte " + n.S + " €. A-t-" + il(P) + " assez d'argent ?", "€",
+      "Oui, " + P[0] + " a assez d'argent : " + n.s + " €, c'est plus que " + n.S + " €.", "Non, " + P[0] + " n'a pas assez d'argent : " + n.s + " €, c'est moins que " + n.S + " €.", "Combien d'argent " + P[0] + " a-t-" + il(P) + " maintenant ?", "assez"]; }, { max: 150, a: function () { return rnd(5, 60); }, b: function () { return rnd(5, 40); } }],
+    [function (n) { return ["L'ascenseur peut porter " + n.S + " kg. Un livreur pèse " + n.a + " kg et ses cartons pèsent " + n.b + " kg. Peut-il monter avec ses cartons ?", "kg",
+      "Oui : " + n.s + " kg, c'est moins que " + n.S + " kg.", "Non : " + n.s + " kg, c'est plus que " + n.S + " kg. Il faudra faire deux voyages !", "Combien pèsent le livreur et ses cartons ensemble ?", "max"]; }, { max: 300, a: function () { return rnd(60, 90); }, b: function () { return rnd(15, 60); } }],
+    [function (n, P) { return ["La brouette de " + P[0] + " peut porter " + n.S + " kg. " + Il(P) + " y met " + n.a + " kg de bois et " + n.b + " kg de pierres. La brouette peut-elle porter tout ce chargement ?", "kg",
+      "Oui : " + n.s + " kg, c'est moins que " + n.S + " kg.", "Non : " + n.s + " kg, c'est plus que " + n.S + " kg. Il faudra deux voyages !", "Combien pèse tout le chargement ?", "max"]; }, { max: 150, a: function () { return rnd(15, 60); }, b: function () { return rnd(15, 60); } }],
+    [function (n) { var M = maitresse(); return ["Le car a " + n.S + " places. Pour la sortie de la classe de " + M[0] + ", il y a " + n.a + " élèves et " + n.b + " adultes. Tout le monde peut-il monter dans le car ?", "personnes",
+      "Oui : " + n.s + " personnes, c'est moins que " + n.S + " places.", "Non : " + n.s + " personnes, c'est plus que " + n.S + " places. Il faut un deuxième car !", "Combien de personnes partent en sortie ?", "max"]; }, { max: 80, a: function () { return rnd(15, 30); }, b: function () { return rnd(3, 9); } }]
+  ] };
 Object.keys(CAS2).forEach(function (k) { CAS[k] = CAS2[k]; CAS[k].e2 = true; });
+/* fraction écrite {frac:a/d} et lue « trois cinquièmes » */
+function F(a, d) { return "{frac:" + a + "/" + d + "}"; }
+function fracOral(t) { return t.replace(/\{frac:(\d+)\/(\d+)\}/g, function (m, a, d) { return fracMots(+a, +d); }); }
 
 /* texte lu par la synthèse vocale : unités en toutes lettres */
 function oralUnites(t) {
-  return t.replace(/(\d) €/g, "$1 euros").replace(/(\d) kg\b/g, "$1 kilos").replace(/(\d) cm\b/g, "$1 centimètres")
+  return t.replace(/\b1,(\d\d) €/g, "1 euro $1").replace(/\b1 €/g, "1 euro").replace(/(\d+),(\d\d) €/g, "$1 euros $2").replace(/(\d) €/g, "$1 euros").replace(/(\d) km\b/g, "$1 kilomètres").replace(/(\d) kg\b/g, "$1 kilos").replace(/(\d) cm\b/g, "$1 centimètres")
           .replace(/(\d) m\b/g, "$1 mètres").replace(/(\d) L\b/g, "$1 litres").replace(/(\d) g\b/g, "$1 grammes").replace(/(\d) dm\b/g, "$1 décimètres").replace(/(\d) (\d{3})\b/g, "$1$2");
 }
 /* espaces insécables : « ? » et l'unité ne partent jamais seuls à la ligne */
-function insecables(t) { return t.replace(/ \?/g, "\u00a0?").replace(/ !/g, "\u00a0!").replace(/(\d) (€|kg|cm|dm|m|g|L)(?![a-zà-ü])/g, "$1\u00a0$2"); }
+function insecables(t) { return t.replace(/ \?/g, "\u00a0?").replace(/ !/g, "\u00a0!").replace(/(\d) (€|kg|km|cm|dm|m|g|L)(?![a-zà-ü])/g, "$1\u00a0$2"); }
 function texte(t) { return insecables(elisions(t)); }
 function oral(t) { return oralUnites(elisions(t)); }
 /* Énoncés personnels de perso.json : { cas, texte, unite, phrase, blague?, question? (deux étapes), max?, min?, f|x|y|z|k|q: [min, max] }.
@@ -637,26 +702,50 @@ function ctxPerso(m) {
   }
   return [function (n) { return [rempl(m.texte, n), m.unite, rempl(m.phrase, n), rempl(m.blague, n), rempl(m.question, n)]; }, o, true];
 }
-function ctxDuCas(id) {
-  var perso = ((G.perso || {}).problemes || []).filter(function (m) { return m.cas === id; }).map(ctxPerso);
+function ctxDuCas(id, p) {
+  var perso = id === "e2_seuil" || id === "s2_fraction" ? [] : ((G.perso || {}).problemes || []).filter(function (m) { return m.cas === id; }).map(ctxPerso);
   /* un énoncé personnel une fois sur deux quand il y en a */
-  return perso.length && ((G.perso || {}).forcer || Math.random() < 0.5) ? perso : CAS[id].ctx;
+  if (perso.length && ((G.perso || {}).forcer || Math.random() < 0.5)) return perso;
+  var l = CAS[id].ctx.filter(function (c) { return p.centimes || !c[1].centimes; }); /* prix avec centimes : sur demande */
+  return l.length ? l : CAS[id].ctx;
 }
 G.probleme = function (p) {
   var ids = p.problemes && p.problemes.length ? p.problemes : Object.keys(CAS).filter(function (k) {
+    if (CAS[k].frac && !p.fractions) return false; /* fraction qui reste : sur demande */
     return p.strategies ? p.strategies.indexOf(CAS[k].s) >= 0 : CAS[k].s !== 9; }); /* deux étapes (9) : seulement sur demande */
-  var id = pick(ids), C = CAS[id], cx = pick(ctxDuCas(id)), d = deuxPrenoms(), P = { 0: d[0][0], g: d[0][1], 1: d[1] };
-  var lim = Math.min(p.limite || 999, cx[1].max || 9999), n;
-  /* nombres dans la limite, et aucun mauvais schéma qui donnerait par hasard la bonne réponse (2 + 2 = 2 × 2) */
+  var id = pick(ids), C = CAS[id], cx = pick(ctxDuCas(id, p)), d = deuxPrenoms(), P = { 0: d[0][0], g: d[0][1], 1: d[1] };
+  var lim = Math.min(p.limite || 999, cx[1].max || 9999), n, cent = !!cx[1].centimes && !!C.argent;
+  /* nombres dans la limite, et aucun mauvais schéma qui donnerait par hasard la bonne réponse (2 + 2 = 2 × 2).
+     En centimes : tirage en pièces de 5 centimes, puis × 5 ; la limite porte sur les euros. */
   for (var essai = 0; essai < 200; essai++) {
-    n = C.nombres(p, lim, cx[1]);
-    var grand = Math.max.apply(null, Object.keys(n).map(function (k) { return n[k]; }));
-    var ambigu = !C.e2 && C.schemas(n).slice(1).some(function (s) { return valeurSchema(s) === n.r; });
+    n = C.nombres(p, cent ? lim * 20 : lim, cent ? Object.assign({}, cx[1], { min: Math.max(cx[1].min || 0, 20) }) : cx[1]); /* en centimes : 1 € au moins */
+    if (cent) C.argent.forEach(function (k) { n[k] *= 5; });
+    var grand = Math.max.apply(null, Object.keys(n).map(function (k) { return cent && C.argent.indexOf(k) >= 0 ? n[k] / 100 : n[k]; }));
+    var ambigu = !C.e2 && !C.frac && C.schemas(n).slice(1).some(function (s) { return valeurSchema(s) === n.r; });
     if (grand <= lim && !ambigu) break;
   }
   var nd = {};
-  for (var k in n) nd[k] = n[k] >= 1000 ? fmt(n[k]) : n[k]; /* 4 386 à l'écran */
+  for (var k in n) nd[k] = cent && C.argent.indexOf(k) >= 0 ? euros(n[k]) : n[k] >= 1000 ? fmt(n[k]) : n[k]; /* 4 386, 19,95 à l'écran */
   var tx = cx[0](nd, P);
+  var rep = cent ? euros(n.r) : String(n.r);
+  if (C.frac) {
+    /* « 5/5 − 3/5 = ? cinquièmes » : on écrit le nombre de parts */
+    var unite = ORD[n.d] + (n.d > 3 ? "s" : ""), calc = F(n.d, n.d) + " − " + F(n.a, n.d), ph = "Il reste " + F(n.r, n.d) + " " + tx[1] + ".";
+    return { consigne: { texte: texte(tx[0]), oral: fracOral(oral(tx[0])) }, expression: n.d + " − " + n.a, reponse: String(n.r),
+             probleme: { cas: id, strategie: C.s, op: "−", calcul: calc, unite: unite, phrase: texte(ph), phrase_oral: fracOral(ph),
+                         blague: tx[2] ? texte(tx[2]) : null, blague_oral: tx[2] ? oral(tx[2]) : null, aide: "", piege: false, schemas: [],
+                         aideOp: "Le tout, c'est " + F(n.d, n.d) + ". J'enlève la part déjà faite : je fais une soustraction.",
+                         etapes: [{ op: "−", calcul: calc, reponse: String(n.r), question: null, aideOp: "Le tout, c'est " + F(n.d, n.d) + ". J'enlève la part déjà faite : je fais une soustraction." }] } };
+  }
+  if (C.seuil) {
+    var oui = tx[5] === "assez" ? n.s >= n.S : n.s <= n.S, ph2 = oui ? tx[2] : tx[3];
+    var e1 = C.etapes(nd)[0], derniere2 = tx[0].replace(/^.*[.!]\s/, "");
+    return { consigne: { texte: texte(tx[0]), oral: oral(tx[0]) }, expression: e1.expr, reponse: oui ? "oui" : "non",
+             probleme: { cas: id, strategie: 9, op: "+", calcul: e1.expr, unite: tx[1], phrase: texte(ph2), phrase_oral: oral(ph2),
+                         blague: null, blague_oral: null, aide: "", aideOp: C.aides[0], piege: false, schemas: [],
+                         etapes: [{ op: "+", calcul: e1.expr, reponse: String(n.s), aideOp: C.aides[0], question: texte(tx[4]), question_oral: oral(tx[4]) },
+                                  { ouinon: true, reponse: oui ? "oui" : "non", seuil: String(nd.S), question: texte(derniere2), question_oral: oral(derniere2), aideOp: C.aides[1] }] } };
+  }
   if (C.e2) {
     var et = C.etapes(n), etd = C.etapes(nd), derniere = tx[0].replace(/^.*[.!]\s/, ""); /* la question finale de l'énoncé */
     return { consigne: { texte: texte(tx[0]), oral: oral(tx[0]) }, expression: etd[1].expr, reponse: String(n.r),
@@ -668,15 +757,19 @@ G.probleme = function (p) {
   var e = C.expr(nd);
   var sch = C.schemas(n).map(function (s, i) { return { spec: s, bon: i === 0 }; });
   for (var i = sch.length - 1; i > 0; i--) { var j = rnd(0, i), x = sch[i]; sch[i] = sch[j]; sch[j] = x; }
-  return { consigne: { texte: texte(tx[0]), oral: oral(tx[0]) }, expression: e, reponse: String(n.r),
-           probleme: { cas: id, strategie: C.s, op: C.op, calcul: e, unite: tx[1], phrase: texte(tx[2]), phrase_oral: oral(tx[2]),
-                       blague: tx[3] ? texte(tx[3]) : null, blague_oral: tx[3] ? oral(tx[3]) : null,
-                       aide: C.aide, aideOp: C.aideOp, piege: !!C.piege,
-                       schemas: sch.map(function (x) { return { svg: svgSchema(x.spec), alt: altSchema(x.spec), spec: x.spec, bon: x.bon }; }) } };
+  if (cent) { LAB = {}; C.argent.forEach(function (k) { LAB[n[k]] = nd[k]; }); }
+  try {
+    return { consigne: { texte: texte(tx[0]), oral: oral(tx[0]) }, expression: e, reponse: rep,
+             probleme: { cas: id, strategie: C.s, op: C.op, calcul: e, unite: tx[1], phrase: texte(tx[2]), phrase_oral: oral(tx[2]), decimal: cent,
+                         blague: tx[3] ? texte(tx[3]) : null, blague_oral: tx[3] ? oral(tx[3]) : null,
+                         aide: C.aide, aideOp: C.aideOp, piege: !!C.piege,
+                         schemas: sch.map(function (x) { return { svg: svgSchema(x.spec), alt: altSchema(x.spec), spec: x.spec, bon: x.bon }; }) } };
+  } finally { LAB = null; }
 };
 G.probleme.cas = Object.keys(CAS);
 /* cas qui demandent une division (à écarter tant que la classe n'en fait pas) */
 G.probleme.division = Object.keys(CAS).filter(function (k) { return CAS[k].op === "÷" || CAS[k].div; });
+G.probleme.fractions = Object.keys(CAS).filter(function (k) { return CAS[k].frac; });
 
 /* specs : lesson.generateurs ; renvoie des exercices au format des calculs */
 function creer(specs) {

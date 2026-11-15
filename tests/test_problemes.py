@@ -23,10 +23,13 @@ def check(cond, msg):
 
 
 def resultat(calcul):
-    """Résultat recalculé depuis la ligne affichée « 47 − 19 = »."""
-    m = re.search(r"([\d ]+?)\s*([+−×÷])\s*([\d ]+?)\s*=", calcul)
-    a, op, b = int(m[1].replace(" ", "")), m[2], int(m[3].replace(" ", ""))
-    return {"+": a + b, "−": a - b, "×": a * b, "÷": a // b}[op]
+    """Résultat recalculé depuis la ligne affichée « 47 − 19 = » ou « 225 − 50 − 120 = » (de gauche à droite)."""
+    expr = calcul.split("=")[0].replace("\u00a0", " ").replace("\u202f", " ")
+    nombres = [int(x.replace(" ", "")) for x in re.findall(r"\d{1,3}(?: \d{3})+|\d+", expr)]
+    r = nombres[0]
+    for op, x in zip(re.findall(r"[+−×÷]", expr), nombres[1:]):
+        r = {"+": r + x, "−": r - x, "×": r * x, "÷": r // x}[op]
+    return r
 
 
 ANDROID_UA = "Mozilla/5.0 (Linux; Android 10; SM-T510) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
@@ -127,8 +130,7 @@ with sync_playwright() as pw:
     check("réussi" in p.inner_text(".card.end"), "écran de fin des calculs")
 
     print("== Aide qui s'efface : 2 réussites d'un cas → plus de schéma ; une erreur → il revient")
-    tous = ["s1_parties", "s1_egales", "s2_complement", "s2_perte", "s2_avant_ajout", "s3_part", "s3_nombre",
-            "s4_grande", "s4_petite", "s4_ecart", "s5_fois_plus", "s5_fois_moins"]
+    tous = p.evaluate("window.GENERATEURS.G.probleme.cas")
     p.evaluate("m => localStorage.setItem('prob:enfant', JSON.stringify(m))", {c: 2 for c in tous})
     ouvrir_calculs()
     check(p.locator(".schema-choix").count() == 0, "cas maîtrisés : on commence par l'opération")

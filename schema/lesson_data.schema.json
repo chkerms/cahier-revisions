@@ -461,7 +461,14 @@
                 "minItems": 1,
                 "uniqueItems": true,
                 "items": {
-                  "enum": [1, 2, 3, 4, 5, 9]
+                  "enum": [
+                    1,
+                    2,
+                    3,
+                    4,
+                    5,
+                    9
+                  ]
                 }
               },
               "problemes": {
@@ -476,12 +483,15 @@
                     "s1_perimetre",
                     "s1_egales",
                     "s2_complement",
+                    "s2_trois",
+                    "s2_fraction",
                     "s2_perte",
                     "s2_avant_ajout",
                     "s3_part",
                     "s3_nombre",
                     "s4_grande",
                     "s4_petite",
+                    "s4_moins",
                     "s4_ecart",
                     "s5_fois_plus",
                     "s5_fois_moins",
@@ -489,7 +499,8 @@
                     "e2_depenses",
                     "e2_groupes_fois",
                     "e2_groupes_plus",
-                    "e2_total_partage"
+                    "e2_total_partage",
+                    "e2_seuil"
                   ]
                 }
               },
@@ -498,6 +509,14 @@
                 "type": "integer",
                 "minimum": 50,
                 "maximum": 9999
+              },
+              "centimes": {
+                "description": "probleme : autorise des prix avec centimes (19,95 €) dans les contextes prévus",
+                "type": "boolean"
+              },
+              "fractions": {
+                "description": "probleme : autorise la fraction qui reste (1 − 3/5) quand aucun cas n'est imposé",
+                "type": "boolean"
               }
             }
           },

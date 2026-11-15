@@ -35,6 +35,7 @@ def declarer(present):
         idx.pop("perso", None)
     INDEX.write_text(json.dumps(idx, ensure_ascii=False, indent=1) + "\n")
 CHAMPS = {"enfant", "amis", "maitresse", "doudou", "parents", "famille", "problemes"}
+SANS_PERSO = {"e2_seuil", "s2_fraction"}  # forme de réponse particulière : contextes du code seulement
 CHAMPS_ENONCE = {"cas", "texte", "unite", "phrase", "blague", "question", "max", "min", "f", "x", "y", "z", "k", "q", "e"}
 
 
@@ -75,6 +76,9 @@ def verifier(d):
                 err.append(f"{ou} : champ inconnu « {k} »")
         if not m["texte"].rstrip().endswith("?") or "{r}" not in m["phrase"]:
             err.append(f"{ou} : le texte finit par « ? » et la phrase contient {{r}}")
+        if m["cas"] in SANS_PERSO:
+            err.append(f"{ou} : pas d'énoncé personnel pour le cas {m['cas']} (réponse oui / non ou fraction)")
+            continue
         if m["cas"].startswith("e2_") and not (m.get("question") or "").rstrip().endswith("?"):
             err.append(f"{ou} : un problème à deux étapes demande une « question » intermédiaire qui finit par « ? »")
     if not err and d.get("problemes"):

@@ -167,9 +167,15 @@ def connus(sc):
         v = [sc["petit"], sc["grand"]]
     return [x for x in v if x != "?"]
 
-OP = {"s1_parties": "+", "s1_trois": "+", "s1_perimetre": "×", "s1_egales": "×", "s2_complement": "−", "s2_perte": "−", "s2_avant_ajout": "−", "s3_part": "÷",
+OP = {"s1_parties": "+", "s1_trois": "+", "s1_perimetre": "×", "s1_egales": "×", "s2_trois": "−", "s4_moins": "−", "s2_complement": "−", "s2_perte": "−", "s2_avant_ajout": "−", "s3_part": "÷",
       "s3_nombre": "÷", "s4_grande": "+", "s4_petite": "−", "s4_ecart": "−", "s5_fois_plus": "×", "s5_fois_moins": "÷"}
 E2_CAS = ["e2_gagne_donne", "e2_depenses", "e2_groupes_fois", "e2_groupes_plus", "e2_total_partage"]
+SPECIAUX = ["s2_fraction", "e2_seuil"]
+
+
+def nb(x):
+    """« 19,95 » ou « 3 785 » → valeur exacte"""
+    return Fraction(x.replace("\u00a0", "").replace(" ", "").replace(",", "."))
 def fmt(n):
     return f"{n:,}".replace(",", " ")
 NP = 1000
@@ -184,7 +190,7 @@ const PERSO = {{enfant: ["Inès", "f"], amis: [["Anna", "f"], ["Elio", "m"], ["I
               {{cas: "s5_fois_plus", texte: "Iris a {{a}} perles. Anna en a {{kfois}} plus. Combien de perles a Anna ?", unite: "perles", phrase: "Anna a {{r}} perles.", f: [3, 9]}}]}};
 for (const perso of [null, PERSO]) {{
   G.G.perso = perso;
-  for (const c of G.G.probleme.cas) for (let i = 0; i < {NP}; i++) out.push(Object.assign(G.G.probleme({{problemes: [c], limite: {limite}}}), {{c, perso: !!perso}}));
+  for (const c of G.G.probleme.cas) for (let i = 0; i < {NP}; i++) out.push(Object.assign(G.G.probleme({{problemes: [c], limite: {limite}, centimes: i % 2 === 0}}), {{c, perso: !!perso}}));
 }}
 G.G.perso = null;
 out.push(...G.creer([{{id: "g2", type: "probleme", nombre: 6, ref: ["b1"], params: {{}}}}]).map(x => Object.assign(x, {{c: "defaut"}})));
@@ -192,7 +198,7 @@ out.push(...G.creer([{{id: "g1", type: "probleme", nombre: 6, ref: ["b1"], param
 process.stdout.write(JSON.stringify({{cas: G.G.probleme.cas, out}}));
 """
     res = json.loads(subprocess.run(["node", "-e", JSP], capture_output=True, text=True, check=True).stdout)
-    if sorted(res["cas"]) != sorted(list(OP) + E2_CAS):
+    if sorted(res["cas"]) != sorted(list(OP) + E2_CAS + SPECIAUX):
         ko(f"problèmes : cas {res['cas']}")
     vus = {}
     noms_perso = 0
@@ -213,6 +219,32 @@ process.stdout.write(JSON.stringify({{cas: G.G.probleme.cas, out}}));
             ko(f"problème {P['cas']} : personnalisation présente sans perso « {t} »")
         if re.search(r"\b(de|que) [AEIOUYÉÈ]", texte_complet):
             ko(f"problème {P['cas']} : élision manquante « {texte_complet} »")
+        if P["cas"] == "s2_fraction":
+            vus.setdefault(P["cas"], set()).add(t.split(" ")[0] + "…" + str(len(t)))
+            m = re.search(r"\{frac:(\d+)/(\d+)\}", t)
+            d_, a_, r_ = int(m[2]), int(m[1]), int(it["reponse"])
+            E1 = P["etapes"]
+            if len(E1) != 1 or r_ != d_ - a_ or r_ < 1 or E1[0]["calcul"] != f"{{frac:{d_}/{d_}}} − {{frac:{a_}/{d_}}}" or f"{{frac:{r_}/{d_}}}" not in P["phrase"]:
+                ko(f"problème fraction : « {t} » → {it['reponse']} / {E1} / {P['phrase']}")
+            if "{" in it["consigne"]["oral"] or "{" in P["phrase_oral"] or not t.endswith("?") or P["schemas"]:
+                ko(f"problème fraction : oral ou forme « {it['consigne']['oral']} »")
+            continue
+        if P["cas"] == "e2_seuil":
+            vus.setdefault(P["cas"], set()).add(t.split(" ")[0] + "…" + str(len(t)))
+            E2 = P["etapes"]
+            tot = eval_expr(E2[0]["calcul"])
+            seuil = nb(E2[1]["seuil"])
+            if len(E2) != 2 or not E2[1].get("ouinon") or tot != nb(E2[0]["reponse"]) or it["reponse"] not in ("oui", "non") or E2[1]["reponse"] != it["reponse"]:
+                ko(f"problème seuil : étapes {E2}")
+            if tot == seuil or not P["phrase"].startswith(it["reponse"].capitalize()) or f"{int(tot)}" not in P["phrase"].replace("\u00a0", " ").replace(" ", ""):
+                ko(f"problème seuil : « {t} » / « {P['phrase']} »")
+            assez = "assez" in t
+            attendu = (tot >= seuil) if assez else (tot <= seuil)
+            if (it["reponse"] == "oui") != attendu:
+                ko(f"problème seuil : mauvaise réponse « {t} » total {tot}, seuil {seuil} → {it['reponse']}")
+            if not E2[0]["question"].endswith("?") or not E2[1]["question"].endswith("?"):
+                ko(f"problème seuil : questions {E2}")
+            continue
         if P["cas"].startswith("e2_"):
             vus.setdefault(P["cas"], set()).add(t.split(" ")[0] + "…" + str(len(t)))
             E2 = P["etapes"]
@@ -242,7 +274,10 @@ process.stdout.write(JSON.stringify({{cas: G.G.probleme.cas, out}}));
             counts["probleme"] = counts.get("probleme", 0) + 1
             continue
         vus.setdefault(P["cas"], set()).add(t.split(" ")[0] + "…" + str(len(t)))
-        rep = int(it["reponse"])
+        dec = bool(P.get("decimal"))
+        rep = nb(it["reponse"])
+        if dec and not re.fullmatch(r"\d+(,\d\d)?", it["reponse"].replace(" ", "")):
+            ko(f"problème {P['cas']} : réponse en euros mal écrite « {it['reponse']} »")
         if eval_expr(it["expression"]) != rep or rep < 1 or P["calcul"] != it["expression"]:
             ko(f"problème {P['cas']} : {it['expression']} ≠ {rep}")
         if re.search(r" ([+−×÷]) ", it["expression"])[1] != OP[P["cas"]] or P["op"] != OP[P["cas"]]:
@@ -251,19 +286,19 @@ process.stdout.write(JSON.stringify({{cas: G.G.probleme.cas, out}}));
         if len(P["schemas"]) != 3 or len(bons) != 1:
             ko(f"problème {P['cas']} : {len(bons)} bon(s) schéma(s)")
             continue
-        if valeur_schema(bons[0]["spec"]) != rep:
+        if valeur_schema(bons[0]["spec"]) != (rep * 100 if dec else rep):
             ko(f"problème {P['cas']} : le bon schéma vaut {valeur_schema(bons[0]['spec'])}, réponse {rep}")
         specs = [json.dumps(s["spec"], sort_keys=True) for s in P["schemas"]]
         if len(set(specs)) != 3:
             ko(f"problème {P['cas']} : schémas identiques")
         for s in P["schemas"]:
-            if not s["bon"] and valeur_schema(s["spec"]) == rep:
+            if not s["bon"] and valeur_schema(s["spec"]) == (rep * 100 if dec else rep):
                 ko(f"problème {P['cas']} : un mauvais schéma donne aussi {rep} ({s['spec']})")
             root = ET.fromstring(s["svg"])
             if not root.get("viewBox") or "script" in s["svg"] or "href" in s["svg"]:
                 ko(f"problème {P['cas']} : SVG invalide")
         # nombres de l'énoncé = nombres connus du bon schéma ; bornes
-        nombres = [int(x.replace(" ", "")) for x in re.findall(r"\d{1,3}(?: \d{3})+|\d+", t)]
+        nombres = [nb(x) * (100 if dec else 1) for x in re.findall(r"\d{1,3}(?: \d{3})+(?:,\d\d)?|\d+(?:,\d\d)?", t)]
         for x in connus(bons[0]["spec"]):
             if P["cas"] in ("s5_fois_plus", "s5_fois_moins"):
                 break
@@ -271,7 +306,9 @@ process.stdout.write(JSON.stringify({{cas: G.G.probleme.cas, out}}));
                 continue
             if x not in nombres:
                 ko(f"problème {P['cas']} : {x} du schéma absent de l'énoncé « {t} »")
-        if max(nombres + [rep]) > limite:
+        if dec and "€" not in t + P["unite"]:
+            ko(f"problème {P['cas']} : centimes hors d'un prix « {t} »")
+        if max([x / (100 if dec else 1) for x in nombres] + [rep]) > limite:
             ko(f"problème {P['cas']} : nombre > {limite} : « {t} »")
         # rédaction
         for mauvais in ("undefined", "NaN", "null", "  "):
@@ -285,13 +322,13 @@ process.stdout.write(JSON.stringify({{cas: G.G.probleme.cas, out}}));
             ko(f"problème {P['cas']} : phrase trop longue « {t} »")
         if re.search(r" \?|\d (€|kg|cm|dm|m|g|L)\b", t + " " + P["phrase"]):
             ko(f"problème {P['cas']} : espace sécable avant « ? » ou une unité : « {t} »")
-        rf = f"{rep:,}".replace(",", " ")
+        rf = it["reponse"] if dec else f"{int(rep):,}".replace(",", " ")
         if rf not in P["phrase"].replace("\u00a0", " ") or P["unite"] not in P["phrase"] + " " + t:
             ko(f"problème {P['cas']} : phrase réponse « {P['phrase']} » ({rep} {P['unite']})")
         if "€" in it["consigne"]["oral"] or re.search(r"\d (kg|cm|dm|m|g|L)\b", it["consigne"]["oral"]):
             ko(f"problème {P['cas']} : unité non lue « {it['consigne']['oral']} »")
         counts["probleme"] = counts.get("probleme", 0) + 1
-    for c in list(OP) + E2_CAS:
+    for c in list(OP) + E2_CAS + SPECIAUX:
         if len(vus.get(c, ())) < 4:
             ko(f"problème {c} : contextes peu variés ({len(vus.get(c, ()))})")
     perso_tires = [it for it in res["out"] if it.get("perso") and re.search(r"prunes|sacs de \d+ billes|perles\. Anna en a", it["consigne"]["texte"])]

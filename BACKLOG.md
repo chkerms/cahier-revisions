@@ -260,6 +260,22 @@ Plus tard, chacune dans son propre lot : stratégie 6 (demi-droite du temps, ré
 - **[ARBITRÉ 15/11/2026]** Rubrique : nombres jusqu'à 1 000 et pas de division par défaut (« pas plus de 1 000 pour le moment, pas encore de division ») ; la Zone parent permet de passer à 10 000 et d'activer les partages.
 - Non retenu : un doudou tiré d'un personnage de dessin animé connu (règle des personnages connus), le nom de la boîte à histoires (marque).
 
+## Lot 7 : suite des problèmes (grands nombres, centimes, oui ou non, fraction qui reste) [DEMANDÉ 15/11/2026] · LIVRÉ en 1.11.0 (15/11/2026)
+
+**Besoin.** Nouvelle série d'exemples du cahier de l'enfant : reste avec de grands nombres, seuil avec réponse oui / non, fraction qui reste, grand partage, prix en deux étapes, multiplication d'un nombre à 2 chiffres, groupements, partie manquante parmi trois, complément avec de grands nombres, prix avec centimes, fois plus avec un grand nombre. Deux exemples reportés par le parent (« on verra plus tard »). Aucun énoncé repris : contextes et nombres originaux.
+
+**Livré.**
+- **Nouveaux cas** (23 au total) : `s2_trois` (t − a − b, schéma à 3 cases dont une inconnue), `s4_moins` (« de moins », comparaison directe), `e2_seuil` (total en une addition, puis « Est-ce assez ? / Peut-on tout porter ? » : boutons 👍 Oui / 👎 Non, un seul essai, la phrase réponse compare les deux nombres), `s2_fraction` (6/6 − 3/6 : « Quelle fraction reste-t-il ? », réponse en nombre de parts, sans schéma).
+- **Grands nombres** (quand la limite est 10 000) : nouveaux contextes camion, billets de train, train en km, club de foot, gros camion, places de cinéma ; grands partages (436 ÷ 2) ; groupements plus grands dans `s3_nombre`.
+- **Prix avec centimes** : contextes marqués `centimes` dans `s1_parties`, `s2_perte`, `s4_grande`, `s4_moins`, `s5_fois_plus` ; montants multiples de 5 centimes, 1 € au moins ; schémas étiquetés « 19,95 » ; touche « , » sur le pavé ; lecture « 19 euros 95 ».
+- **Zone parent, carte « Problèmes »** : options « Prix avec des centimes » et « Fraction qui reste », désactivées par défaut (arbitrage du 15/11 : pas plus de 1 000, pas de division pour le moment).
+- **Rubrique** : un cas qui a un énoncé personnel est tiré une fois sur deux dans sa stratégie (avec 23 cas, les énoncés personnels devenaient rares).
+- Pas d'énoncé personnel pour `e2_seuil` et `s2_fraction` (`outils/perso.py` le refuse).
+
+**Tests.** `test_generateurs.py` : 84 000 problèmes (un sur deux en mode centimes), réponses décimales recalculées, seuils (bonne réponse oui / non, total ≠ seuil), fractions (r = d − a). `test_rubrique_problemes.py` : réponses avec virgule, fractions, oui / non, options activées. `test_problemes.py` : calcul à trois nombres. Non-régression verte.
+
+**À vérifier sur la tablette.** Lecture à voix haute des prix et des fractions ; taille des boutons Oui / Non.
+
 ---
 
 ## Idées non arbitrées [PROPOSÉ]
