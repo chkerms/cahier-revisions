@@ -1,7 +1,7 @@
 /* Cahier de révisions : lecteur de leçons chiffrées. Aucune dépendance externe. */
 "use strict";
 (function () {
-var VERSION = "1.12.0";
+var VERSION = "1.13.0";
 var app = document.getElementById("app");
 var nextBar = document.getElementById("next");
 var D = null, IMG = {}, LESSONS = [], VUE = null, CTX = null, PERSO = null; /* CTX : leçon d'origine de la question affichée (quiz transverse) */
@@ -756,9 +756,11 @@ function svgPropre(src) {
 /* fabrique le fond ; renvoie { svg, vb, lieu(l) → {zones: [éléments], labels: [[x,y]], type, x, y} } */
 function fondCarte(fond, lecon) {
   var C = window.CARTES || {}, F = { parts: {} };
-  if (fond === "monde" && C.monde) {
-    var m = C.monde; F.vb = m.vb;
-    F.svg = sv("svg", { viewBox: m.vb.join(" "), class: "geo monde" }, sv("path", { d: m.contour, class: "geo-eau" }));
+  if (fond !== "france" && C[fond] && C[fond].parts) {
+    /* fond à zones (monde : continents et océans ; europe : pays), villes placées par la projection s'il y en a une */
+    var m = C[fond], mp = m.proj; F.vb = m.vb;
+    F.svg = sv("svg", { viewBox: m.vb.join(" "), class: "geo " + fond },
+      m.contour ? sv("path", { d: m.contour, class: "geo-eau" }) : sv("rect", { x: 0, y: 0, width: m.vb[2], height: m.vb[3], class: "geo-eau" }));
     var gE = sv("g"), gT = sv("g");
     Object.keys(m.parts).forEach(function (k) {
       var p = m.parts[k], oc = p.type === "ocean";
@@ -767,11 +769,13 @@ function fondCarte(fond, lecon) {
       F.parts[k] = { el: el, nom: p.nom, labels: p.labels, type: p.type };
     });
     F.svg.appendChild(gE); F.svg.appendChild(gT);
+    (m.textes || []).forEach(function (t) { F.svg.appendChild(sv("text", { x: t[1], y: t[2], class: "geo-fond-txt " + t[3] }, t[0])); });
     F.lieu = function (l) {
-      var keys = m.zones[l.zone] || (m.parts[l.zone] ? [l.zone] : m.parts["oc_" + l.zone] ? ["oc_" + l.zone] : null);
+      if (mp && l.lat != null && l.lon != null) return { type: "point", x: (l.lon - mp.lon0) * mp.c * mp.k, y: (mp.lat1 - l.lat) * mp.k };
+      var zs = m.zones || {}, keys = zs[l.zone] || (m.parts[l.zone] ? [l.zone] : m.parts["oc_" + l.zone] ? ["oc_" + l.zone] : null);
       if (!keys) return null;
       return { zones: keys.map(function (k) { return F.parts[k].el; }), type: F.parts[keys[0]].type,
-        labels: keys.reduce(function (a, k) { return a.concat(F.parts[k].labels); }, []) };
+        labels: keys.reduce(function (a, k) { return a.concat(F.parts[k].labels); }, []).slice(0, keys.length > 2 ? 1 : 2) };
     };
   } else if (fond === "france" && C.france) {
     var f = C.france, pr = f.proj; F.vb = f.vb;
@@ -881,7 +885,7 @@ function stepCarte(main) {
     var q = Q[qi], c = q.c, F = fondCarte(C.fond), tries = 0, solved = false, faux = [], evt = null;
     var R = {}; /* id de cible → résolution sur ce fond */
     cibles.forEach(function (x) { R[x.id] = F.lieu(x); });
-    var r = R[c.id], cible = r.type === "ocean" ? "cet océan" : r.type === "continent" ? "ce continent" : "ce lieu";
+    var r = R[c.id], cible = r.type === "ocean" ? "cet océan" : r.type === "continent" ? "ce continent" : r.type === "pays" ? "ce pays" : "ce lieu";
     function noteGeo(ok) {
       var o = { erreurs: tries, faux: faux.slice(), resolu: ok };
       if (evt) journal.maj(evt, o);
@@ -942,19 +946,31 @@ function stepCarte(main) {
       /* toucher : une zone, sinon le point le plus proche (tolérance pour le doigt) */
       F.svg.addEventListener("click", function (ev) {
         if (solved) return;
-        var t = ev.target, id = t.getAttribute && t.getAttribute("data-cible");
-        if (!id) {
+        var t = ev.target, estPoint = t.classList && t.classList.contains("geo-point");
+        /* zone sous le doigt (même sous un point) et point le plus proche (tolérance pour le doigt) */
+        var zoneId = !estPoint && t.getAttribute ? t.getAttribute("data-cible") : null, sous = null;
+        if (!zoneId && document.elementsFromPoint && (ev.clientX || ev.clientY)) {
+          document.elementsFromPoint(ev.clientX, ev.clientY).some(function (e) {
+            if (e.classList && e.classList.contains("geo-point")) return false;
+            if (e.getAttribute && e.getAttribute("data-cible")) { zoneId = e.getAttribute("data-cible"); return true; }
+            if (e.getAttribute && e.getAttribute("data-part") && !sous) sous = e;
+            return false;
+          });
+        }
+        var pointId = estPoint ? t.getAttribute("data-cible") : null;
+        if (!pointId && (ev.clientX || ev.clientY)) {
           var pt = F.svg.createSVGPoint(); pt.x = ev.clientX; pt.y = ev.clientY;
           var m = F.svg.getScreenCTM(); if (m) pt = pt.matrixTransform(m.inverse());
-          var best = null, bd = 45 * F.u;
+          var bd = 45 * F.u;
           cibles.forEach(function (x) { var rx = R[x.id]; if (rx.type !== "point") return;
-            var dd = Math.hypot(rx.x - pt.x, rx.y - pt.y); if (dd < bd) { bd = dd; best = x.id; } });
-          id = best;
+            var dd = Math.hypot(rx.x - pt.x, rx.y - pt.y); if (dd < bd) { bd = dd; pointId = x.id; } });
         }
+        /* un pays demandé se touche partout sur le pays, même sur une ville ; une ville demandée, au plus près */
+        var id = r.type === "point" ? (pointId || zoneId) : (zoneId || pointId);
         if (id === c.id) return gagne();
         if (id) { var x = cibles.filter(function (y) { return y.id === id; })[0]; return rate(plain(x.nom), cible2el[id]); }
-        var part = t.getAttribute && t.getAttribute("data-part");
-        if (part && F.parts[part]) return rate(F.parts[part].nom, [t], true);
+        var cible3 = t.getAttribute && t.getAttribute("data-part") ? t : sous, part = cible3 && cible3.getAttribute("data-part");
+        if (part && F.parts[part]) return rate(F.parts[part].nom, [cible3], true);
         fb.innerHTML = ""; fb.appendChild(h("div", { class: "feedback again" }, "Touche une des zones de couleur, ou un point."));
       });
     } else {

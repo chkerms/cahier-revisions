@@ -296,6 +296,12 @@ Plus tard, chacune dans son propre lot : stratégie 6 (demi-droite du temps, ré
 
 **À vérifier sur la tablette.** Précision du doigt sur les petites zones (Europe, une petite commune), fluidité des animations sur l'ancienne tablette, lecture à voix haute des noms de lieux.
 
+**Complément 1.13.0 (15/11/2026), à la demande du parent.**
+- Fond **`europe`** dans `cartes.js` (Natural Earth 1:50m) : un pays par zone, le Royaume-Uni en 4 parties (Angleterre, Écosse, pays de Galles, Irlande du Nord ; zone composée `royaume_uni`), villes par latitude et longitude, mers nommées.
+- Fond à zones générique dans l'appli (monde et europe), question « Quel est ce pays ? ».
+- Toucher : un pays demandé se valide partout sur le pays, même sur le point d'une ville ; une ville demandée se valide au plus près (tolérance au doigt). Test ajouté (`test_espace.py` : point posé dans une zone).
+- Leçons complétées (fond local plus grand, deux villes de plus en France) et nouvelle leçon sur les voyages en Europe.
+
 **[À ARBITRER]** Continents : les leçons comptent 6 continents avec une seule Amérique (Amérique du Nord et du Sud citées comme ses deux parties). Si la classe en compte 7, les zones `amerique_nord` et `amerique_sud` existent déjà : il suffit de republier la leçon.
 
 ---

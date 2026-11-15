@@ -265,14 +265,20 @@ BLOC_DEFS = {"titre": "b_titre", "paragraphe": "b_paragraphe", "definition": "b_
 def check_lieux(fond, lieux, path, images, C):
     """Chaque lieu doit exister sur son fond (zone connue, point dans le cadre)."""
     pbs, used = [], set()
-    if fond == "monde":
-        m = C["monde"]
-        connues = set(m["zones"]) | set(m["parts"]) | {k[3:] for k in m["parts"] if k.startswith("oc_")}
+    if fond in C and "parts" in C[fond]:
+        m = C[fond]
+        connues = set(m.get("zones", {})) | set(m["parts"]) | {k[3:] for k in m["parts"] if k.startswith("oc_")}
         for i, l in enumerate(lieux):
-            if "zone" not in l:
-                pbs.append(f"{path}/{i} « {l['nom']} » : sur le fond monde, donner une zone ({', '.join(sorted(connues))})")
+            if "lat" in l and "proj" in m:
+                pr, vb = m["proj"], m["vb"]
+                x, y = (l["lon"] - pr["lon0"]) * pr["c"] * pr["k"], (pr["lat1"] - l["lat"]) * pr["k"]
+                if not (0 <= x <= vb[2] and 0 <= y <= vb[3]):
+                    pbs.append(f"{path}/{i} « {l['nom']} » : hors de la carte {fond}")
+            elif "zone" not in l:
+                pbs.append(f"{path}/{i} « {l['nom']} » : sur le fond {fond}, donner une zone ({', '.join(sorted(connues))})"
+                           + (" ou lat et lon" if "proj" in m else ""))
             elif l["zone"] not in connues:
-                pbs.append(f"{path}/{i} : zone « {l['zone']} » inconnue du fond monde ({', '.join(sorted(connues))})")
+                pbs.append(f"{path}/{i} : zone « {l['zone']} » inconnue du fond {fond} ({', '.join(sorted(connues))})")
     elif fond == "france":
         pr, vb = C["france"]["proj"], C["france"]["vb"]
         for i, l in enumerate(lieux):

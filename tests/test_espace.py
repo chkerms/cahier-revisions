@@ -138,15 +138,22 @@ with sync_playwright() as pw:
     check(p.locator(".geo-bloc svg.france .geo-rose").count() == 1, "rose des vents")
     check(p.locator(".geo-bloc svg.local").count() == 1 and p.locator(".geo-bloc svg.local text.geo-label").count() == 4, "fond local : 4 repères nommés")
     check(p.locator(".geo-bloc svg.local script").count() == 0, "fond local : SVG nettoyé")
+    eu = p.eval_on_selector_all(".geo-bloc svg.europe text.geo-label", "els => els.map(e => e.textContent)")
+    check(sorted(eu) == ["Espagne", "Lisbonne", "Royaume-Uni"], f"carte d'Europe : 2 pays (Royaume-Uni en 4 parties, une étiquette) et une ville ({eu})")
+    check(p.locator(".geo-bloc svg.europe [data-part]").evaluate_all("els => els.filter(e => e.style.fill).length") == 5, "Europe : Espagne + 4 parties du Royaume-Uni coloriées")
     shot(p, "e5_lecon_lieux.png")
     p.click("[data-step=carte]"); p.wait_for_selector(".geo-q")
     noms = {c["nom"]: c["id"] for c in LIEUX["carte"]["cibles"]}
+    centre_phare = lambda: (lambda b: (b["x"] + b["width"] / 2, b["y"] + b["height"] / 2))(p.locator(".jeu .geo-point").bounding_box())
     for i in range(len(noms)):
         nom = p.inner_text(".geo-q strong")
-        if nom == "Le phare":
+        if nom == "Le champ":
+            # le phare est dans le champ : quand on demande le champ, toucher le phare compte pour le champ
+            x, y = centre_phare(); p.mouse.click(x, y)
+            check("Bravo" in p.inner_text(".geo-fb"), "zone demandée : un point posé dessus ne gêne pas")
+        elif nom == "Le phare":
             # le doigt tombe à côté du point : tolérance
-            box = p.locator(".jeu .geo-point").bounding_box()
-            p.mouse.click(box["x"] + box["width"] / 2 + 18, box["y"] + box["height"] / 2 + 12)
+            x, y = centre_phare(); p.mouse.click(x + 18, y + 12)
             check("Bravo" in p.inner_text(".geo-fb") and "Il éclaire la mer." in p.inner_text(".geo-fb"), "point touché à côté : accepté, phrase « info » affichée")
         else:
             p.locator(f".jeu [data-cible={noms[nom]}]").first.dispatch_event("click")

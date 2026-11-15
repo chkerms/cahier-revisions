@@ -1540,12 +1540,12 @@
       }
     },
     "fond": {
-      "description": "Fond de carte : « monde » (planisphère, continents et océans), « france » (France métropolitaine, villes placées par latitude et longitude), ou l'id d'une image SVG de la leçon (fond local fabriqué par outils/fond_local.py : zones désignées par leur id).",
+      "description": "Fond de carte : « monde » (planisphère, continents et océans), « france » (France métropolitaine, villes placées par latitude et longitude), « europe » (pays en zones, villes par latitude et longitude), ou l'id d'une image SVG de la leçon (fond local fabriqué par outils/fond_local.py : zones désignées par leur id).",
       "type": "string",
-      "pattern": "^(monde|france|img[0-9]+)$"
+      "pattern": "^(monde|france|europe|img[0-9]+)$"
     },
     "lieu": {
-      "description": "Un lieu sur un fond de carte. Monde : zone (afrique, amerique, amerique_nord, amerique_sud, antarctique, asie, europe, oceanie, pacifique, atlantique, indien, arctique, austral). France : lat et lon (degrés décimaux). Image : zone (id d'un élément du SVG) ou x et y (unités du viewBox).",
+      "description": "Un lieu sur un fond de carte. Monde : zone (afrique, amerique, amerique_nord, amerique_sud, antarctique, asie, europe, oceanie, pacifique, atlantique, indien, arctique, austral). France : lat et lon (degrés décimaux). Europe : zone (pays : france, espagne, portugal, angleterre, ecosse, pays_de_galles, irlande_du_nord, royaume_uni, irlande, belgique, pays_bas, luxembourg, allemagne, suisse, italie, autriche…) ou lat et lon. Image : zone (id d'un élément du SVG) ou x et y (unités du viewBox).",
       "type": "object",
       "additionalProperties": false,
       "required": [

@@ -7,7 +7,8 @@ Sources (téléchargées dans un cache local, jamais commitées) :
 
 Fonds produits :
 - monde : planisphère (projection Natural Earth), continents et océans cliquables ;
-- france : France métropolitaine, régions, pays voisins, mers ; projection donnée pour placer une ville par sa latitude et sa longitude.
+- france : France métropolitaine, régions, pays voisins, mers ; projection donnée pour placer une ville par sa latitude et sa longitude ;
+- europe : Europe de l'Ouest, un pays par zone (le Royaume-Uni en 4 parties : Angleterre, Écosse, pays de Galles, Irlande du Nord), villes par latitude et longitude.
 
 Usage : python3 outils/cartes_build.py   (pip install --break-system-packages shapely)
 Le fond « autour de chez moi » d'une leçon se fait avec outils/fond_local.py : il est personnel, il va dans la leçon chiffrée.
@@ -26,6 +27,7 @@ warnings.filterwarnings("ignore", category=DeprecationWarning)
 RACINE = Path(__file__).resolve().parent.parent
 CACHE = Path("/tmp/cartes-src")
 NE = "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_50m_admin_0_countries.geojson"
+NE_SUB = "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_50m_admin_0_map_subunits.geojson"
 FG = "https://raw.githubusercontent.com/gregoiredavid/france-geojson/master/"
 
 
@@ -222,6 +224,64 @@ TEXTES_FR = [  # étiquettes du fond : pays voisins et mers (italique, discrète
 ]
 
 
+# ------------------------------------------------------------------ Europe
+E_LON0, E_LAT0, E_LON1, E_LAT1 = -11.0, 35.4, 16.0, 56.2
+E_C = math.cos(math.radians(46.5))
+W_EU = 1000
+E_K = W_EU / ((E_LON1 - E_LON0) * E_C)
+H_EU = round((E_LAT1 - E_LAT0) * E_K)
+PAYS = {  # clé de zone : (nom avec article, code Natural Earth ADM0_A3 ou SU_A3, position de l'étiquette ou None)
+    "france": ("la France", "FRA", (2.4, 46.6)), "espagne": ("l'Espagne", "ESP", (-3.6, 40.0)), "portugal": ("le Portugal", "PRT", (-8.0, 40.7)),
+    "angleterre": ("l'Angleterre", "ENG", (-1.6, 52.6)), "ecosse": ("l'Écosse", "SCT", (-4.2, 56.6)), "pays_de_galles": ("le pays de Galles", "WLS", (-3.7, 52.3)),
+    "irlande_du_nord": ("l'Irlande du Nord", "NIR", (-6.7, 54.6)), "irlande": ("l'Irlande", "IRL", (-8.0, 53.2)),
+    "belgique": ("la Belgique", "BEL", (4.6, 50.6)), "pays_bas": ("les Pays-Bas", "NLD", (6.4, 53.45)), "luxembourg": ("le Luxembourg", "LUX", None),
+    "allemagne": ("l'Allemagne", "DEU", (10.0, 51.0)), "suisse": ("la Suisse", "CHE", (8.2, 46.8)), "italie": ("l'Italie", "ITA", (12.5, 42.8)),
+    "autriche": ("l'Autriche", "AUT", (14.0, 47.4)), "danemark": ("le Danemark", "DNK", (9.2, 56.0)), "andorre": ("Andorre", "AND", None),
+    "maroc": ("le Maroc", "MAR", (-5.5, 35.0)), "algerie": ("l'Algérie", "DZA", (3.0, 35.8)), "tunisie": ("la Tunisie", "TUN", None),
+    "tchequie": ("la Tchéquie", "CZE", (15.0, 49.8)), "pologne": ("la Pologne", "POL", (15.5, 52.5)), "slovenie": ("la Slovénie", "SVN", None),
+    "croatie": ("la Croatie", "HRV", None), "liechtenstein": ("le Liechtenstein", "LIE", None), "monaco": ("Monaco", "MCO", None),
+    "saint_marin": ("Saint-Marin", "SMR", None), "malte": ("Malte", "MLT", None), "vatican": ("le Vatican", "VAT", None),
+    "hongrie": ("la Hongrie", "HUN", None), "slovaquie": ("la Slovaquie", "SVK", None), "bosnie": ("la Bosnie-Herzégovine", "BIH", None),
+}
+TEXTES_EU = [("Océan Atlantique", -8.5, 46.5, "mer"), ("Mer Méditerranée", 4.6, 39.0, "mer"), ("Mer du Nord", 3.2, 55.2, "mer"),
+             ("La Manche", -3.4, 49.85, "mer")]
+
+
+def eu_xy(lon, lat):
+    return (lon - E_LON0) * E_C * E_K, (E_LAT1 - lat) * E_K
+
+
+def proj_eu(g):
+    return transform(lambda xs, ys, zs=None: tuple(zip(*[eu_xy(x, y) for x, y in zip(xs, ys)])), g)
+
+
+def build_europe():
+    cadre = box(E_LON0, E_LAT0, E_LON1, E_LAT1)
+    par_code = {}
+    for f in source(NE)["features"]:
+        par_code[f["properties"]["ADM0_A3"]] = shape(f["geometry"]).buffer(0)
+    for f in source(NE_SUB)["features"]:
+        if f["properties"]["ADM0_A3"] == "GBR":
+            par_code[f["properties"]["SU_A3"]] = shape(f["geometry"]).buffer(0)
+    parts = {}
+    for k, (nom, code, lab) in PAYS.items():
+        g = par_code.get(code)
+        if g is None or not g.intersects(cadre):
+            continue
+        g = g.intersection(cadre)
+        if code == "FRA":  # métropole et Corse seulement
+            g = g.intersection(box(-6, 41, 10, 52))
+        g = proj_eu(g).simplify(0.5)
+        if g.is_empty:
+            continue
+        pt = eu_xy(*lab) if lab else None
+        parts[k] = {"nom": nom, "d": path_d(g), "type": "pays", "labels": [[round(pt[0], 1), round(pt[1], 1)]] if pt else []}
+    manquants = {code for _, code, _ in PAYS.values()} - set(par_code)
+    if manquants:
+        print("  codes absents :", ", ".join(sorted(manquants)))
+    return parts
+
+
 def main():
     zones, eau, contour = build_monde()
     z = {}
@@ -236,11 +296,15 @@ def main():
         "france": {"vb": [0, 0, W_FR, H_FR], "france": path_d(fr), "voisins": path_d(vo), "regions": lignes, "textes": textes,
                    "proj": {"lon0": F_LON0, "lat1": F_LAT1, "c": round(F_C, 6), "k": round(F_K, 4)}},
     }
+    eu = build_europe()
+    data["europe"] = {"vb": [0, 0, W_EU, H_EU], "parts": eu, "zones": {"royaume_uni": ["angleterre", "ecosse", "pays_de_galles", "irlande_du_nord"]},
+                      "textes": [[t, round(eu_xy(lo, la)[0], 1), round(eu_xy(lo, la)[1], 1), s] for t, lo, la, s in TEXTES_EU],
+                      "proj": {"lon0": E_LON0, "lat1": E_LAT1, "c": round(E_C, 6), "k": round(E_K, 4)}}
     js = ("/* Fonds de carte de la rubrique « Questionner l'espace ». Fichier généré par outils/cartes_build.py : ne pas modifier à la main.\n"
           "   Sources : Natural Earth (domaine public) ; IGN Admin Express 2018 via france-geojson (Licence ouverte Etalab). */\n"
           "window.CARTES = " + json.dumps(data, ensure_ascii=False, separators=(",", ":")) + ";\n")
     (RACINE / "cartes.js").write_text(js, encoding="utf-8")
-    print(f"cartes.js : {len(js) // 1024} Ko ; monde {W_MONDE}×{H_MONDE}, France {W_FR}×{H_FR}")
+    print(f"cartes.js : {len(js) // 1024} Ko ; monde {W_MONDE}×{H_MONDE}, France {W_FR}×{H_FR}, Europe {W_EU}×{H_EU} ({len(eu)} pays)")
     for k, v in z.items():
         print(f"  {k:15s} {len(v['d']):6d} car.")
 
