@@ -27,5 +27,40 @@
    "Maman",
    "f"
   ]
+ ],
+ "famille": [
+  [
+   "Papi Jo",
+   "m"
+  ],
+  [
+   "Mamie Lune",
+   "f"
+  ]
+ ],
+ "problemes": [
+  {
+   "cas": "s1_parties",
+   "texte": "Inès cueille {a} prunes et {b} poires. Combien de fruits a-t-elle ?",
+   "unite": "fruits",
+   "phrase": "Inès a {r} fruits.",
+   "blague": "Miam !",
+   "max": 300
+  },
+  {
+   "cas": "e2_groupes_plus",
+   "texte": "Elio a {n} sacs de {k} billes et {e} billes dans sa poche. Combien de billes a-t-il ?",
+   "question": "Combien de billes y a-t-il dans les sacs ?",
+   "unite": "billes",
+   "phrase": "Elio a {r} billes.",
+   "k": [
+    5,
+    8
+   ],
+   "e": [
+    2,
+    9
+   ]
+  }
  ]
 }

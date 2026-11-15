@@ -249,7 +249,11 @@ function cap(t) { return t.charAt(0).toUpperCase() + t.slice(1); }
 /* la maîtresse, le doudou, un parent : [nom, genre] */
 function maitresse() { var m = (G.perso || {}).maitresse; return m ? [m, "f"] : ["la maîtresse", "f"]; }
 function doudou() { var d = (G.perso || {}).doudou; return d && d[0] ? d : ["Pilou le phoque", "m"]; }
-function unParent() { var l = (G.perso || {}).parents; return pick(l && l.length ? l : [["Papa", "m"], ["Maman", "f"]]); }
+function unParent() {
+  var P = G.perso || {}, l = (P.parents && P.parents.length ? P.parents : [["Papa", "m"], ["Maman", "f"]]);
+  if (P.famille && P.famille.length && Math.random() < 0.4) l = P.famille; /* grands-parents… */
+  return pick(l);
+}
 function ils(a, b) { return genre(a) === "f" && genre(b) === "f" ? "elles" : "ils"; }
 function chacun(a, b) { return genre(a) === "f" && genre(b) === "f" ? "chacune" : "chacun"; }
 /* élision devant un prénom à voyelle (« d'Inès », « qu'Anna ») : les prénoms personnels ne sont pas choisis pour l'éviter */
@@ -582,7 +586,7 @@ var CAS2 = {
         { x: function () { return rnd(2, 6); }, y: function () { return rnd(2, 4); }, z: function () { return rnd(2, 7); } }]
     ] },
   e2_groupes_plus: { s: 9, aides: ["D'abord, je cherche le total des groupes égaux : je fais une multiplication.", "Ensuite, j'ajoute ceux qui restent : je fais une addition."],
-    nombres: function (p, lim, o) { var n1 = rnd(2, 9), k = o.k ? o.k() : rnd(3, 10), e = rnd(3, 40); return { n: n1, k: k, s: n1 * k, e: e, r: n1 * k + e }; },
+    nombres: function (p, lim, o) { var n1 = rnd(2, 9), k = o.k ? o.k() : rnd(3, 10), e = o.e ? o.e() : rnd(3, 40); return { n: n1, k: k, s: n1 * k, e: e, r: n1 * k + e }; },
     etapes: function (n) { return [{ op: "×", expr: n.n + " × " + n.k, r: n.s }, { op: "+", expr: n.s + " + " + n.e, r: n.r }]; },
     ctx: [
       [function (n) { var M = maitresse(); return [cap(M[0]) + " a " + n.n + " boîtes de " + n.k + " craies et encore " + n.e + " craies dans sa trousse. Combien de craies a-t-" + il(M) + " en tout ?",
@@ -594,7 +598,7 @@ var CAS2 = {
       [function (n, P) { return [P[0] + " remplit " + n.n + " pages de son album, avec " + n.k + " autocollants par page. Puis " + il(P) + " en colle " + n.e + " sur la couverture. Combien d'autocollants a-t-" + il(P) + " collés ?",
         "autocollants", P[0] + " a collé " + n.r + " autocollants.", null, "Combien d'autocollants y a-t-il sur les pages ?"]; }, { k: function () { return pick([4, 5, 6, 8, 10, 12]); } }]
     ] },
-  e2_total_partage: { s: 9, aides: ["D'abord, je réunis les deux quantités : je fais une addition.", "Ensuite, je partage en parts égales : je fais une division."],
+  e2_total_partage: { s: 9, div: true, aides: ["D'abord, je réunis les deux quantités : je fais une addition.", "Ensuite, je partage en parts égales : je fais une division."],
     nombres: function (p, lim, o) { var m = o.min || 3;
       /* partage dans les tables (q ≤ 10), sauf en deux (moitié) ou pour une somme ronde (multiple de 5) */
       for (;;) { var k = o.k ? o.k() : rnd(2, 5), q = o.q ? o.q() : rnd(3, 10), t = k * q, a = rnd(m, t - m); if (t <= lim && Math.abs(2 * a - t) >= t / 8) return { a: a, b: t - a, s: t, k: k, r: q }; } },
@@ -621,10 +625,27 @@ function oralUnites(t) {
 function insecables(t) { return t.replace(/ \?/g, "\u00a0?").replace(/ !/g, "\u00a0!").replace(/(\d) (€|kg|cm|dm|m|g|L)(?![a-zà-ü])/g, "$1\u00a0$2"); }
 function texte(t) { return insecables(elisions(t)); }
 function oral(t) { return oralUnites(elisions(t)); }
+/* Énoncés personnels de perso.json : { cas, texte, unite, phrase, blague?, question? (deux étapes), max?, min?, f|x|y|z|k|q: [min, max] }.
+   Trous : les nombres du cas ({a}, {b}, {r}…), {kfois} (« trois fois »). Ils écrivent les prénoms en toutes lettres. */
+function plage(t) { return function () { return rnd(t[0], t[1]); }; }
+function ctxPerso(m) {
+  var o = {};
+  ["max", "min"].forEach(function (k) { if (m[k] != null) o[k] = m[k]; });
+  ["f", "x", "y", "z", "k", "q", "e"].forEach(function (k) { if (m[k]) o[k] = plage(m[k]); });
+  function rempl(t, n) {
+    return t == null ? null : String(t).replace(/\{(\w+)\}/g, function (x, k) { return k === "kfois" ? fois(n.k) : n[k] != null ? n[k] : x; });
+  }
+  return [function (n) { return [rempl(m.texte, n), m.unite, rempl(m.phrase, n), rempl(m.blague, n), rempl(m.question, n)]; }, o, true];
+}
+function ctxDuCas(id) {
+  var perso = ((G.perso || {}).problemes || []).filter(function (m) { return m.cas === id; }).map(ctxPerso);
+  /* un énoncé personnel une fois sur deux quand il y en a */
+  return perso.length && ((G.perso || {}).forcer || Math.random() < 0.5) ? perso : CAS[id].ctx;
+}
 G.probleme = function (p) {
   var ids = p.problemes && p.problemes.length ? p.problemes : Object.keys(CAS).filter(function (k) {
     return p.strategies ? p.strategies.indexOf(CAS[k].s) >= 0 : CAS[k].s !== 9; }); /* deux étapes (9) : seulement sur demande */
-  var id = pick(ids), C = CAS[id], cx = pick(C.ctx), d = deuxPrenoms(), P = { 0: d[0][0], g: d[0][1], 1: d[1] };
+  var id = pick(ids), C = CAS[id], cx = pick(ctxDuCas(id)), d = deuxPrenoms(), P = { 0: d[0][0], g: d[0][1], 1: d[1] };
   var lim = Math.min(p.limite || 999, cx[1].max || 9999), n;
   /* nombres dans la limite, et aucun mauvais schéma qui donnerait par hasard la bonne réponse (2 + 2 = 2 × 2) */
   for (var essai = 0; essai < 200; essai++) {
@@ -654,6 +675,8 @@ G.probleme = function (p) {
                        schemas: sch.map(function (x) { return { svg: svgSchema(x.spec), alt: altSchema(x.spec), spec: x.spec, bon: x.bon }; }) } };
 };
 G.probleme.cas = Object.keys(CAS);
+/* cas qui demandent une division (à écarter tant que la classe n'en fait pas) */
+G.probleme.division = Object.keys(CAS).filter(function (k) { return CAS[k].op === "÷" || CAS[k].div; });
 
 /* specs : lesson.generateurs ; renvoie des exercices au format des calculs */
 function creer(specs) {

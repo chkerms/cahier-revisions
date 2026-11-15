@@ -177,7 +177,11 @@ for limite in (999, 9999):
     JSP = f"""
 require({json.dumps(str(ROOT / "generateurs.js"))});
 const G = globalThis.GENERATEURS, out = [];
-const PERSO = {{enfant: ["Inès", "f"], amis: [["Anna", "f"], ["Elio", "m"], ["Iris", "f"]], maitresse: "Madame Olive", doudou: ["Doudou Ours", "m"], parents: [["Papa", "m"], ["Maman", "f"]]}};
+const PERSO = {{enfant: ["Inès", "f"], amis: [["Anna", "f"], ["Elio", "m"], ["Iris", "f"]], maitresse: "Madame Olive", doudou: ["Doudou Ours", "m"], parents: [["Papa", "m"], ["Maman", "f"]],
+  famille: [["Papi Jo", "m"]],
+  problemes: [{{cas: "s1_parties", texte: "Inès cueille {{a}} prunes et {{b}} poires. Combien de fruits a-t-elle ?", unite: "fruits", phrase: "Inès a {{r}} fruits.", blague: "Miam !", max: 300}},
+              {{cas: "e2_groupes_plus", texte: "Elio a {{n}} sacs de {{k}} billes et {{e}} billes dans sa poche. Combien de billes a-t-il ?", question: "Combien de billes y a-t-il dans les sacs ?", unite: "billes", phrase: "Elio a {{r}} billes.", k: [5, 8], e: [2, 9]}},
+              {{cas: "s5_fois_plus", texte: "Iris a {{a}} perles. Anna en a {{kfois}} plus. Combien de perles a Anna ?", unite: "perles", phrase: "Anna a {{r}} perles.", f: [3, 9]}}]}};
 for (const perso of [null, PERSO]) {{
   G.G.perso = perso;
   for (const c of G.G.probleme.cas) for (let i = 0; i < {NP}; i++) out.push(Object.assign(G.G.probleme({{problemes: [c], limite: {limite}}}), {{c, perso: !!perso}}));
@@ -290,6 +294,11 @@ process.stdout.write(JSON.stringify({{cas: G.G.probleme.cas, out}}));
     for c in list(OP) + E2_CAS:
         if len(vus.get(c, ())) < 4:
             ko(f"problème {c} : contextes peu variés ({len(vus.get(c, ()))})")
+    perso_tires = [it for it in res["out"] if it.get("perso") and re.search(r"prunes|sacs de \d+ billes|perles\. Anna en a", it["consigne"]["texte"])]
+    if len(perso_tires) < NP * 0.3 * 3:
+        ko(f"problèmes : énoncés personnels peu tirés ({len(perso_tires)})")
+    if any("fois plus" not in it["consigne"]["texte"] for it in res["out"] if "perles. Anna en a" in it["consigne"]["texte"]):
+        ko("problèmes : trou {kfois} non rempli")
     if noms_perso < NP * len(res["cas"]) * 0.5:
         ko(f"problèmes : la personnalisation est peu utilisée ({noms_perso} énoncés)")
 

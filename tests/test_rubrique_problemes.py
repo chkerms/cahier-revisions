@@ -99,7 +99,9 @@ with sync_playwright() as pw:
     check(p.locator("#btn-problemes").count() == 1, "raccourci « Problèmes » sur l'accueil")
     zone_parent()
     etat = p.inner_text("#perso-etat")
-    check("Personnalisation chargée" in etat and "2 copains" in etat and "la maîtresse" in etat, f"personnalisation déchiffrée ({etat})")
+    check("Personnalisation chargée" in etat and "2 copains" in etat and "la maîtresse" in etat and "2 énoncés personnels" in etat, f"personnalisation déchiffrée ({etat})")
+    check(p.get_attribute("[data-prob-limite='999']", "aria-pressed") == "true" and p.get_attribute("[data-prob-division='0']", "aria-pressed") == "true",
+          "par défaut : nombres jusqu'à 1 000, pas de division")
     p.click("#next-btn"); p.wait_for_selector(".theme-tile")
 
     print("== Séance de 5 problèmes")
@@ -108,6 +110,7 @@ with sync_playwright() as pw:
     check(g and g.get("maitresse") == PERSO["maitresse"] and g.get("enfant") == PERSO["enfant"], f"personnalisation donnée aux générateurs ({g})")
     enonces, deux, calculs = jouer_seance()
     check(1 <= deux <= 2, f"1 ou 2 problèmes à deux étapes ({deux})")
+    defaut = enonces + calculs
     tout = " ".join(enonces)
     noms = [PERSO["enfant"][0], PERSO["maitresse"], PERSO["doudou"][0]] + [a[0] for a in PERSO["amis"]] + [x[0] for x in PERSO["parents"]]
     check(not re.search(r"undefined|NaN|null", tout), "énoncés sans trou")
@@ -115,7 +118,21 @@ with sync_playwright() as pw:
     check(p.evaluate("Object.keys(localStorage).filter(k => k.startsWith('prog:') && k.endsWith(':problemes')).length") == 0, "pas de progression de leçon pour la rubrique")
     print("   énoncés :", *enonces, sep="\n     ")
 
-    print("== Variété et personnalisation sur 4 séances")
+    print("== Par défaut, sur 3 séances : pas de division, nombres ≤ 999")
+    for k in range(3):
+        p.click("#fin button:has-text('Recommencer')"); p.wait_for_selector(".q.enonce")
+        e, d, c = jouer_seance()
+        defaut += e + c
+    grands = [int(x.replace(" ", "").replace("\u00a0", "")) for t in defaut for x in re.findall(r"\d{1,3}(?:[ \u00a0]\d{3})+|\d+", t)]
+    check(max(grands) <= 999, f"nombres ≤ 999 (max {max(grands)})")
+    check(not any("÷" in c for c in defaut), "aucune division")
+    check(any("prunes" in t or "sacs de" in t for t in defaut), "énoncés personnels tirés")
+
+    print("== Division et nombres jusqu'à 10 000 activés : variété et personnalisation sur 4 séances")
+    zone_parent(); p.click("[data-prob-division='1']"); p.click("[data-prob-limite='9999']")
+    p.click("#next-btn"); p.wait_for_selector(".theme-tile")
+    p.click("#btn-problemes"); p.wait_for_selector(".q.enonce"); jouer_seance()
+    calculs = []
     vus_noms, cas = set(), set()
     for k in range(4):
         p.click("#fin button:has-text('Recommencer')"); p.wait_for_selector(".q.enonce")
@@ -131,16 +148,10 @@ with sync_playwright() as pw:
     print("== Bilan")
     zone_parent(); p.wait_for_function("window.__bilan !== undefined")
     b = p.evaluate("window.__bilan")
-    check("[problemes]" in b and re.search(r"problèmes \d+/25 sans erreur", b), "bilan : 25 problèmes de la rubrique comptés")
+    check("[problemes]" in b and re.search(r"problèmes \d+/45 sans erreur", b), "bilan : 45 problèmes de la rubrique comptés")
 
-    print("== Réglages parent : nombres jusqu'à 1 000, rubrique masquée")
-    p.click("[data-prob-limite='999']")
-    p.click("#next-btn"); p.wait_for_selector(".theme-tile")
-    p.click("#btn-problemes"); p.wait_for_selector(".q.enonce")
-    e, d, c = jouer_seance()
-    grands = [int(x.replace(" ", "").replace(" ", "")) for t in e + c for x in re.findall(r"\d{1,3}(?:[  ]\d{3})+|\d+", t)]
-    check(max(grands) <= 999, f"nombres ≤ 999 (max {max(grands)})")
-    zone_parent(); p.click("#btn-prob-affiche")
+    print("== Réglage parent : rubrique masquée")
+    p.click("#btn-prob-affiche")
     p.click("#next-btn"); p.wait_for_selector(".theme-tile")
     check(p.locator("#btn-problemes").count() == 0, "rubrique masquée par le parent")
 

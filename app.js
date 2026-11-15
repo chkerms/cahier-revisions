@@ -1,7 +1,7 @@
 /* Cahier de révisions : lecteur de leçons chiffrées. Aucune dépendance externe. */
 "use strict";
 (function () {
-var VERSION = "1.10.0";
+var VERSION = "1.10.1";
 var app = document.getElementById("app");
 var nextBar = document.getElementById("next");
 var D = null, IMG = {}, LESSONS = [], VUE = null, CTX = null, PERSO = null; /* CTX : leçon d'origine de la question affichée (quiz transverse) */
@@ -1158,9 +1158,12 @@ function carteModeQuiz() {
    un cas par stratégie (le tout, une partie, un partage, une comparaison, fois plus ou moins), plus 1 ou 2 problèmes à deux étapes */
 var PROB_N = 5;
 function problemesDispo() { return !!(window.GENERATEURS && window.GENERATEURS.G.probleme) && !reglagesProfil().prob_off; }
-function probLimite() { return reglagesProfil().prob_limite === 999 ? 999 : 9999; }
+/* réglages par défaut : nombres jusqu'à 1 000 et pas de division (la classe n'en fait pas encore) */
+function probLimite() { return reglagesProfil().prob_limite === 9999 ? 9999 : 999; }
+function probDivision() { return !!reglagesProfil().prob_division; }
 function tirerCasProblemes() {
-  var cas = window.GENERATEURS.G.probleme.cas, parS = {};
+  var G = window.GENERATEURS.G, sansDiv = probDivision() ? [] : G.probleme.division || [], parS = {};
+  var cas = G.probleme.cas.filter(function (c) { return sansDiv.indexOf(c) < 0; });
   cas.forEach(function (c) { var k = c.slice(0, 2); (parS[k] = parS[k] || []).push(c); });
   var deux = parS.e2 || [], nb2 = Math.min(deux.length, Math.random() < 0.5 ? 1 : 2);
   var un = shuffle(Object.keys(parS).filter(function (k) { return k !== "e2"; })).slice(0, PROB_N - nb2).map(function (k) { return pick(parS[k]); });
@@ -1180,7 +1183,8 @@ function openProblemes() {
 function carteProblemes() {
   var r = reglagesProfil(), lim = probLimite(), P = PERSO || {};
   var perso = PERSO ? "Personnalisation chargée : " + [(P.amis || []).length + " copain" + ((P.amis || []).length > 1 ? "s" : ""), P.maitresse ? "la maîtresse" : null,
-    P.doudou ? "le doudou" : null, (P.parents || []).length ? "les parents" : null].filter(Boolean).join(", ") + "."
+    P.doudou ? "le doudou" : null, (P.parents || []).length ? "les parents" : null, (P.famille || []).length ? "la famille" : null,
+    (P.problemes || []).length ? (P.problemes || []).length + " énoncés personnels" : null].filter(Boolean).join(", ") + "."
     : "Pas de personnalisation : les énoncés utilisent des prénoms au hasard" + (r.prenom && !profils.actif().test ? " et le prénom " + r.prenom : "") + ".";
   return h("div", { class: "card", id: "carte-problemes" }, h("div", { class: "label", text: "Problèmes (profil " + profils.actif().libelle + ")" }),
     h("div", { class: "actions" },
@@ -1191,6 +1195,12 @@ function carteProblemes() {
       var on = lim === x[0];
       return h("button", { class: "btn" + (on ? " primary" : ""), type: "button", "data-prob-limite": x[0], "aria-pressed": on ? "true" : "false", text: x[1],
         onclick: function () { setReglagesProfil({ prob_limite: x[0] }); renderParent("Problèmes : nombres jusqu'à " + x[1] + "."); } });
+    })),
+    h("div", { class: "label", text: "Division" }),
+    h("div", { class: "actions" }, [[false, "Pas encore"], [true, "Oui, problèmes de partage"]].map(function (x) {
+      var on = probDivision() === x[0];
+      return h("button", { class: "btn" + (on ? " primary" : ""), type: "button", "data-prob-division": x[0] ? "1" : "0", "aria-pressed": on ? "true" : "false", text: x[1],
+        onclick: function () { setReglagesProfil({ prob_division: x[0] }); renderParent("Problèmes : division " + (x[0] ? "activée." : "écartée.")); } });
     })),
     h("p", { class: "parentnote", id: "perso-etat", text: perso }));
 }

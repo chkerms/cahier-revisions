@@ -254,7 +254,11 @@ Plus tard, chacune dans son propre lot : stratégie 6 (demi-droite du temps, ré
 
 **À vérifier sur la tablette.** Lisibilité des schémas à 3 cases ; lecture à voix haute des questions « D'abord / Ensuite ».
 
-**En attente.** Les réponses du parent au questionnaire de personnalisation, pour écrire `perso.json` et ajouter des contextes tirés de la vie de l'enfant (activités, goûts, lieux).
+**Complément 1.10.1 (15/11/2026), après le questionnaire du parent.**
+- Personnalisation publiée (`lecons/perso.json`, chiffrée) : enfant, 5 copains, maîtresse, doudou, parents, famille, 18 énoncés personnels (activités, repas, vacances, doudous), avec blagues.
+- Nouveaux champs : `famille` (tirée 4 fois sur 10 à la place d'un parent) et `problemes` (énoncés personnels à trous, vérifiés par `outils/perso.py` avant chiffrement ; plage `e` ajoutée au cas `e2_groupes_plus`).
+- **[ARBITRÉ 15/11/2026]** Rubrique : nombres jusqu'à 1 000 et pas de division par défaut (« pas plus de 1 000 pour le moment, pas encore de division ») ; la Zone parent permet de passer à 10 000 et d'activer les partages.
+- Non retenu : un doudou tiré d'un personnage de dessin animé connu (règle des personnages connus), le nom de la boîte à histoires (marque).
 
 ---
 
