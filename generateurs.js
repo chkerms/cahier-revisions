@@ -508,5 +508,5 @@ function creer(specs) {
   return out;
 }
 
-root.GENERATEURS = { creer: creer, types: Object.keys(G), enLettres: enLettres, G: G };
+root.GENERATEURS = { creer: creer, types: Object.keys(G), enLettres: enLettres, G: G, schema: svgSchema };
 })(typeof window !== "undefined" ? window : globalThis);
