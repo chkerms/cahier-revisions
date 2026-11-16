@@ -47,6 +47,12 @@
    },
    {
     "id": "b6",
+    "type": "animation",
+    "modele": "cycle_eau",
+    "legende": "L'eau monte de la mer au ciel, puis redescend."
+   },
+   {
+    "id": "b7",
     "type": "carte",
     "fond": "monde",
     "titre": "Quelques continents",
@@ -70,6 +76,11 @@
      {
       "nom": "Océan Atlantique",
       "zone": "atlantique"
+     },
+     {
+      "nom": "La Réunion",
+      "lat": -21.11,
+      "lon": 55.53
      }
     ]
    }

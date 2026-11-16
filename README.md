@@ -14,7 +14,7 @@ Défi chrono sur chaque leçon de maths : 10 calculs le plus vite possible, rép
 
 Rubrique « Problèmes » sur l'accueil : 5 problèmes tirés au hasard à chaque séance (le tout, une partie, un partage, une comparaison, fois plus ou fois moins, et des problèmes à deux étapes, dont des questions « oui ou non ? » ; en option : prix avec centimes, fraction qui reste), avec le schéma en barres, le choix de l'opération et la phrase réponse. Les énoncés peuvent être personnalisés (prénoms, maîtresse, doudou) grâce à `lecons/perso.json`, chiffré comme les leçons (`outils/perso.py`).
 
-Rubrique « Questionner l'espace » : la Terre et les astres (animations du système solaire, du jour et de la nuit, de l'année et de la Lune), continents et océans, villes et lieux. L'étape « Sur la carte » fait toucher le bon endroit sur un planisphère, une carte de France ou un fond local, puis nommer un lieu montré.
+Rubrique « Questionner l'espace » : la Terre et les astres (animations du système solaire, du jour et de la nuit, de l'année et de la Lune), continents et océans, villes et lieux (carte de France avec fleuves et montagnes, Europe, outre-mer), paysages et modes de vie. Rubrique « Questionner la matière » : l'eau (animation du cycle de l'eau). L'étape « Sur la carte » fait toucher le bon endroit sur un planisphère, une carte de France ou un fond local, puis nommer un lieu montré.
 
 Le contenu des leçons est chiffré (RSA-OAEP + AES-GCM). Le code est public, les leçons ne le sont pas : elles ne s'ouvrent qu'avec le mot de passe du cahier.
 

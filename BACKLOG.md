@@ -302,6 +302,14 @@ Plus tard, chacune dans son propre lot : stratégie 6 (demi-droite du temps, ré
 - Toucher : un pays demandé se valide partout sur le pays, même sur le point d'une ville ; une ville demandée se valide au plus près (tolérance au doigt). Test ajouté (`test_espace.py` : point posé dans une zone).
 - Leçons complétées (fond local plus grand, deux villes de plus en France) et nouvelle leçon sur les voyages en Europe.
 
+**Complément 1.14.0 (16/11/2026), à la demande du parent : milieux, cycle de l'eau, France.**
+- Thèmes `milieux` (🏞️ Paysages et modes de vie, rubrique Questionner l'espace) et `eau` (💧 L'eau, nouvelle rubrique « Questionner la matière »).
+- Animation `cycle_eau` : évaporation, nuages, pluie, ruissellement ; l'étape en cours est mise en valeur et lue dans la légende.
+- Fond `france` : 5 fleuves (Seine, Loire, Garonne, Rhône, Rhin ; Natural Earth 1:10m, prolongés jusqu'à l'embouchure) et 5 massifs (Alpes, Pyrénées, Massif central, Jura, Vosges ; régions géographiques Natural Earth), zones `seine`… `vosges`. Un fleuve se touche sur un trait large invisible ; une ville posée près d'un fleuve reste prioritaire.
+- Fond `monde` : lieux par latitude et longitude (projection Natural Earth calculée par l'appli et par le validateur), pour l'outre-mer.
+- Questions de l'étape « Sur la carte » : « Quel est ce fleuve ? », « Quel est ce massif ? ».
+- 6 leçons : la ville et la campagne, la montagne et le littoral (dessins originaux légendés), le cycle de l'eau, les montagnes de France, les fleuves de France, la France d'outre-mer.
+
 **[À ARBITRER]** Continents : les leçons comptent 6 continents avec une seule Amérique (Amérique du Nord et du Sud citées comme ses deux parties). Si la classe en compte 7, les zones `amerique_nord` et `amerique_sud` existent déjà : il suffit de republier la leçon.
 
 ---

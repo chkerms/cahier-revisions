@@ -273,6 +273,16 @@ svg.geo .geo-terre{fill:#F3E6C4;stroke:#8C7B5A;stroke-width:.6}
 svg.geo.france .geo-terre{fill:#FFF3D6;stroke:#6B5B3E;stroke-width:1.6}
 svg.geo.europe .geo-terre{fill:#EFE8D6;stroke:#8C7B5A;stroke-width:1.2}
 svg.geo .geo-voisin{fill:#E4E4E4;stroke:#A0A0A0;stroke-width:1}
+svg.geo .geo-massif{fill:#C9A97A;opacity:.55;stroke:#8C6A3E;stroke-width:1}
+svg.geo .geo-fleuve-trait{fill:none;stroke:#3D8FD6;stroke-width:3;stroke-linecap:round;stroke-linejoin:round;pointer-events:none}
+svg.geo .geo-fleuve-hit{fill:none;stroke:transparent;stroke-width:34;stroke-linecap:round}
+svg.geo .geo-fleuve.repere .geo-fleuve-trait{stroke:#0B5CAD;stroke-width:6}
+.jeu svg.geo .geo-fleuve.geo-cible .geo-fleuve-trait{stroke:#E0A000;stroke-width:6}
+.jeu svg.geo .geo-fleuve.geo-ok .geo-fleuve-trait{stroke:#1E8E50}
+.jeu svg.geo .geo-fleuve.geo-faux .geo-fleuve-trait{stroke:#E53935}
+.jeu svg.geo .geo-fleuve.geo-montre .geo-fleuve-trait{stroke:#FF7043;stroke-width:9}
+.jeu svg.geo .geo-fleuve{fill:none!important}
+.jeu svg.geo .geo-massif.geo-cible{opacity:.9}
 svg.geo .geo-limite{fill:none;stroke:#B0408A;stroke-width:1.2;stroke-dasharray:5 4}
 svg.geo .geo-fond-txt{font-size:22px;font-style:italic;text-anchor:middle;fill:#777;pointer-events:none}
 svg.geo .geo-fond-txt.mer{fill:#2C6CB0}
@@ -315,6 +325,20 @@ svg.anim .lune-sombre{fill:#3A3F55}
 svg.anim .lune-sombre.vue{stroke:#596080;stroke-width:2}
 svg.anim .lune-claire{fill:#F2F2E8}
 svg.anim .encart{fill:#1B2A55;stroke:#5C6B99;stroke-width:2}
+svg.anim.cycle_eau{background:#CFE8FA}
+svg.anim .ciel{fill:#CFE8FA}
+svg.anim .sol{fill:#7CB867}
+svg.anim .neige{fill:#fff}
+svg.anim .mer{fill:#3C8DDB}
+svg.anim .riviere{fill:none;stroke:#3C8DDB;stroke-width:9;stroke-linecap:round;stroke-dasharray:16 8}
+svg.anim .vapeur{fill:#fff}
+svg.anim .nuage circle{fill:#fff}
+svg.anim .nuage.gris circle{fill:#B8C2CF}
+svg.anim .goutte{stroke:#2F7AB8;stroke-width:3;stroke-linecap:round}
+svg.anim .eau-txt{fill:#1F2A44;font-size:22px;font-weight:700;text-anchor:middle;font-family:"Andika",sans-serif;stroke:#CFE8FA;stroke-width:4px;paint-order:stroke;opacity:.55}
+svg.anim .eau-txt.clair{fill:#fff;stroke:none}
+svg.anim .eau-txt.on{opacity:1;fill:#C2185B}
+svg.anim .eau-txt.clair.on{fill:#FFE58A}
 .anim-cap{font-weight:700;margin:.6rem 0 .2rem;min-height:3em}
 .anim-actions{margin-top:.2rem}
 </style>

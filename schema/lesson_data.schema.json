@@ -863,9 +863,11 @@
             "donnees",
             "astres",
             "monde",
-            "lieux"
+            "lieux",
+            "milieux",
+            "eau"
           ],
-          "description": "Thème de l'accueil (liste fermée, alignée sur le programme de CE2). Français : grammaire, conjugaison, dictee, vocabulaire, poesie. Maths : nombres, fractions, operations, calcul_mental, mesures, heure, geometrie, monnaie, problemes, donnees. Questionner le monde (rubrique « Questionner l'espace ») : astres (la Terre et les astres), monde (continents et océans), lieux (villes et lieux, se repérer sur une carte). Absent pour les autres matières."
+          "description": "Thème de l'accueil (liste fermée, alignée sur le programme de CE2). Français : grammaire, conjugaison, dictee, vocabulaire, poesie. Maths : nombres, fractions, operations, calcul_mental, mesures, heure, geometrie, monnaie, problemes, donnees. Questionner le monde (rubrique « Questionner l'espace ») : astres (la Terre et les astres), monde (continents et océans), lieux (villes et lieux, se repérer sur une carte), milieux (paysages et modes de vie : ville, campagne, montagne, littoral) ; rubrique « Questionner la matière » : eau (états de l'eau, cycle de l'eau). Absent pour les autres matières."
         },
         "type_lecon": {
           "enum": [
@@ -1545,7 +1547,7 @@
       "pattern": "^(monde|france|europe|img[0-9]+)$"
     },
     "lieu": {
-      "description": "Un lieu sur un fond de carte. Monde : zone (afrique, amerique, amerique_nord, amerique_sud, antarctique, asie, europe, oceanie, pacifique, atlantique, indien, arctique, austral). France : lat et lon (degrés décimaux). Europe : zone (pays : france, espagne, portugal, angleterre, ecosse, pays_de_galles, irlande_du_nord, royaume_uni, irlande, belgique, pays_bas, luxembourg, allemagne, suisse, italie, autriche…) ou lat et lon. Image : zone (id d'un élément du SVG) ou x et y (unités du viewBox).",
+      "description": "Un lieu sur un fond de carte. Monde : zone (afrique, amerique, amerique_nord, amerique_sud, antarctique, asie, europe, oceanie, pacifique, atlantique, indien, arctique, austral). France : lat et lon (degrés décimaux), ou zone de relief (fleuves : seine, loire, garonne, rhone, rhin ; massifs : alpes, pyrenees, massif_central, jura, vosges). Monde : aussi lat et lon pour une île ou un territoire. Europe : zone (pays : france, espagne, portugal, angleterre, ecosse, pays_de_galles, irlande_du_nord, royaume_uni, irlande, belgique, pays_bas, luxembourg, allemagne, suisse, italie, autriche…) ou lat et lon. Image : zone (id d'un élément du SVG) ou x et y (unités du viewBox).",
       "type": "object",
       "additionalProperties": false,
       "required": [
@@ -1615,9 +1617,10 @@
             "systeme_solaire",
             "jour_nuit",
             "annee",
-            "lune"
+            "lune",
+            "cycle_eau"
           ],
-          "description": "Animation dessinée par l'appli : systeme_solaire (8 planètes autour du Soleil), jour_nuit (la Terre tourne sur elle-même, heure du lieu), annee (la Terre autour du Soleil, mois), lune (la Lune autour de la Terre et ce qu'on voit)."
+          "description": "Animation dessinée par l'appli : systeme_solaire (8 planètes autour du Soleil), jour_nuit (la Terre tourne sur elle-même, heure du lieu), annee (la Terre autour du Soleil, mois), lune (la Lune autour de la Terre et ce qu'on voit), cycle_eau (évaporation, nuages, pluie ou neige, ruissellement, retour à la mer)."
         },
         "legende": {
           "$ref": "#/$defs/texte",

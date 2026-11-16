@@ -95,7 +95,7 @@ python3 tests/test_quiz.py http://localhost:8765/ <mot de passe>  # mode quiz : 
 python3 tests/test_defi.py http://localhost:8765/ <mot de passe>  # défi chrono : même copie que test_quiz.py
 python3 tests/test_problemes.py http://localhost:8765/ <mot de passe>  # problèmes guidés : copie avec les 3 exemples + tests/fixtures/essai_problemes.json publiés
 python3 tests/test_rubrique_problemes.py http://localhost:8765/ <mot de passe>  # rubrique Problèmes : copie avec les 3 exemples + `outils/perso.py tests/fixtures/perso_essai.json`
-python3 tests/test_espace.py http://localhost:8765/ <mot de passe>  # Questionner l'espace : copie avec seulement tests/fixtures/essai_espace_monde.json et essai_espace_lieux.json publiées
+python3 tests/test_espace.py http://localhost:8765/ <mot de passe>  # Questionner l'espace : copie avec seulement tests/fixtures/essai_espace_monde.json, essai_espace_lieux.json et essai_espace_france.json publiées
 ```
 `test_app.py` attend exactement les 3 leçons d'exemple : lance `test_quiz.py` et `test_defi.py` sur une autre copie jetable, où la leçon d'essai est aussi publiée, chacun sur un appareil neuf (ils le sont : nouveau contexte de navigateur).
 Dépendances : `pip install --break-system-packages jsonschema cryptography pillow playwright` (et `shapely` pour les fonds de carte).

@@ -27,6 +27,8 @@ warnings.filterwarnings("ignore", category=DeprecationWarning)
 RACINE = Path(__file__).resolve().parent.parent
 CACHE = Path("/tmp/cartes-src")
 NE = "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_50m_admin_0_countries.geojson"
+NE_RIV = "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_10m_rivers_lake_centerlines.geojson"
+NE_REG = "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_10m_geography_regions_polys.geojson"
 NE_SUB = "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_50m_admin_0_map_subunits.geojson"
 FG = "https://raw.githubusercontent.com/gregoiredavid/france-geojson/master/"
 
@@ -216,6 +218,47 @@ def build_france():
     return fr, vo, "".join(d_lignes)
 
 
+FLEUVES = {  # clé : (nom avec article, noms Natural Earth, point ajouté jusqu'à l'embouchure, étiquette)
+    "seine": ("la Seine", ("Seine",), (0.12, 49.46), (1.25, 49.62)),
+    "loire": ("la Loire", ("Loire",), (-2.2, 47.27), (0.6, 47.58)),
+    "garonne": ("la Garonne", ("Garonne",), (-1.07, 45.58), (0.65, 44.45)),
+    "rhone": ("le Rhône", ("Rhône", "Rhne"), None, (5.25, 44.6)),
+    "rhin": ("le Rhin", ("Rhin", "Rhine"), None, (8.25, 48.3)),
+}
+MASSIFS = {  # clé : (nom avec article, nom Natural Earth, étiquette)
+    "alpes": ("les Alpes", "ALPS", (6.6, 45.0)), "pyrenees": ("les Pyrénées", "PYRENEES", (0.6, 42.75)),
+    "massif_central": ("le Massif central", "Massif Central", (2.9, 45.35)), "jura": ("le Jura", "Jura", (5.95, 46.75)),
+    "vosges": ("les Vosges", "Vosges", (6.95, 48.2)),
+}
+
+
+def build_relief():
+    """Fleuves (lignes) et massifs (zones) de la France, en coordonnées de la carte de France."""
+    cadre = box(F_LON0, F_LAT0, F_LON1, F_LAT1)
+    parts = {}
+    riv = source(NE_RIV)["features"]
+    for k, (nom, noms, bout, lab) in FLEUVES.items():
+        lignes = []
+        for f in riv:
+            if f["properties"].get("name") in noms and f["geometry"]:
+                g = shape(f["geometry"]).intersection(cadre)
+                lignes += [l for l in getattr(g, "geoms", [g]) if l.geom_type == "LineString" and not l.is_empty]
+        if bout:  # Natural Earth s'arrête au début de l'estuaire : on prolonge jusqu'à la mer
+            fin = min((pt for l in lignes for pt in (l.coords[0], l.coords[-1])), key=lambda p: math.hypot(p[0] - bout[0], p[1] - bout[1]))
+            from shapely.geometry import LineString
+            lignes.append(LineString([fin, bout]))
+        d = []
+        for l in lignes:
+            c = [fr_xy(x, y) for x, y in l.coords]
+            d.append("M" + " ".join(f"{x:.1f} {y:.1f}" for x, y in c))
+        parts[k] = {"nom": nom, "d": "".join(d), "type": "fleuve", "labels": [[round(v, 1) for v in fr_xy(*lab)]]}
+    reg = source(NE_REG)["features"]
+    for k, (nom, ne_nom, lab) in MASSIFS.items():
+        g = unary_union([shape(f["geometry"]).buffer(0) for f in reg if f["properties"]["NAME"] == ne_nom]).intersection(cadre)
+        parts[k] = {"nom": nom, "d": path_d(proj_fr(g).simplify(0.8)), "type": "montagne", "labels": [[round(v, 1) for v in fr_xy(*lab)]]}
+    return parts
+
+
 TEXTES_FR = [  # étiquettes du fond : pays voisins et mers (italique, discrètes)
     ("Belgique", 4.9, 50.62, "pays"), ("Allemagne", 8.4, 49.75, "pays"), ("Suisse", 8.0, 46.75, "pays"), ("Italie", 8.9, 44.85, "pays"),
     ("Espagne", -3.2, 41.9, "pays"), ("Royaume-Uni", -2.6, 51.15, "pays"),
@@ -292,8 +335,10 @@ def main():
     textes = [[t, round(fr_xy(lo, la)[0], 1), round(fr_xy(lo, la)[1], 1), s] for t, lo, la, s in TEXTES_FR]
     data = {
         "monde": {"vb": [0, 0, W_MONDE, H_MONDE], "contour": path_d(contour), "parts": z,
+                  "proj": {"type": "ne", "s": round(S_MONDE, 4), "xmax": round(XMAX, 6), "ymax": round(YMAX, 6)},
                   "zones": {"amerique": ["amerique_nord", "amerique_sud"]}},
         "france": {"vb": [0, 0, W_FR, H_FR], "france": path_d(fr), "voisins": path_d(vo), "regions": lignes, "textes": textes,
+                   "parts": build_relief(),
                    "proj": {"lon0": F_LON0, "lat1": F_LAT1, "c": round(F_C, 6), "k": round(F_K, 4)}},
     }
     eu = build_europe()

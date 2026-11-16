@@ -7,6 +7,7 @@ Code retour : 0 si aucune erreur (les avertissements n'empêchent pas le build),
 import argparse
 import ast
 import json
+import math
 import xml.etree.ElementTree as ET
 from fractions import Fraction
 import re
@@ -27,7 +28,7 @@ DUREE_MAX = 10 * 60
 THEMES = {"francais": ["grammaire", "conjugaison", "dictee", "vocabulaire", "poesie"],
           "mathematiques": ["nombres", "fractions", "operations", "calcul_mental", "mesures", "heure", "geometrie",
                             "monnaie", "problemes", "donnees"],
-          "questionner_le_monde": ["astres", "monde", "lieux"]}
+          "questionner_le_monde": ["astres", "monde", "lieux", "milieux", "eau"]}
 CARTES_JS = Path(__file__).resolve().parent.parent / "cartes.js"
 GEO_PAR_QUESTION = 10  # secondes par lieu à toucher ou à nommer (hypothèse à recaler)
 
@@ -262,6 +263,18 @@ BLOC_DEFS = {"titre": "b_titre", "paragraphe": "b_paragraphe", "definition": "b_
              "animation": "b_animation", "carte": "b_carte"}
 
 
+def projeter(p, lat, lon):
+    """Latitude, longitude → coordonnées du fond (même calcul que l'appli)."""
+    if p.get("type") == "ne":
+        lr, f = math.radians(lon), math.radians(lat)
+        f2 = f * f
+        f4 = f2 * f2
+        x = lr * (0.8707 - 0.131979 * f2 + f4 * (-0.013791 + f4 * (0.003971 * f2 - 0.001529 * f4)))
+        y = f * (1.007226 + f2 * (0.015085 + f4 * (-0.044475 + 0.028874 * f2 - 0.005916 * f4)))
+        return (x + p["xmax"]) * p["s"], (p["ymax"] - y) * p["s"]
+    return (lon - p["lon0"]) * p["c"] * p["k"], (p["lat1"] - lat) * p["k"]
+
+
 def check_lieux(fond, lieux, path, images, C):
     """Chaque lieu doit exister sur son fond (zone connue, point dans le cadre)."""
     pbs, used = [], set()
@@ -271,7 +284,7 @@ def check_lieux(fond, lieux, path, images, C):
         for i, l in enumerate(lieux):
             if "lat" in l and "proj" in m:
                 pr, vb = m["proj"], m["vb"]
-                x, y = (l["lon"] - pr["lon0"]) * pr["c"] * pr["k"], (pr["lat1"] - l["lat"]) * pr["k"]
+                x, y = projeter(pr, l["lat"], l["lon"])
                 if not (0 <= x <= vb[2] and 0 <= y <= vb[3]):
                     pbs.append(f"{path}/{i} « {l['nom']} » : hors de la carte {fond}")
             elif "zone" not in l:
@@ -281,9 +294,14 @@ def check_lieux(fond, lieux, path, images, C):
                 pbs.append(f"{path}/{i} : zone « {l['zone']} » inconnue du fond {fond} ({', '.join(sorted(connues))})")
     elif fond == "france":
         pr, vb = C["france"]["proj"], C["france"]["vb"]
+        reliefs = set(C["france"].get("parts", {}))
         for i, l in enumerate(lieux):
+            if "zone" in l:
+                if l["zone"] not in reliefs:
+                    pbs.append(f"{path}/{i} : zone « {l['zone']} » inconnue du fond france ({', '.join(sorted(reliefs))})")
+                continue
             if "lat" not in l or "lon" not in l:
-                pbs.append(f"{path}/{i} « {l['nom']} » : sur le fond france, donner lat et lon")
+                pbs.append(f"{path}/{i} « {l['nom']} » : sur le fond france, donner lat et lon, ou une zone ({', '.join(sorted(reliefs))})")
                 continue
             x, y = (l["lon"] - pr["lon0"]) * pr["c"] * pr["k"], (pr["lat1"] - l["lat"]) * pr["k"]
             if not (0 <= x <= vb[2] and 0 <= y <= vb[3]):

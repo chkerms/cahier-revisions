@@ -1,7 +1,7 @@
 /* Cahier de révisions : lecteur de leçons chiffrées. Aucune dépendance externe. */
 "use strict";
 (function () {
-var VERSION = "1.13.0";
+var VERSION = "1.14.0";
 var app = document.getElementById("app");
 var nextBar = document.getElementById("next");
 var D = null, IMG = {}, LESSONS = [], VUE = null, CTX = null, PERSO = null; /* CTX : leçon d'origine de la question affichée (quiz transverse) */
@@ -753,6 +753,27 @@ function svgPropre(src) {
     return document.importNode(root, true);
   } catch (e) { return null; }
 }
+/* latitude, longitude → coordonnées du fond (projection Natural Earth pour le monde, équirectangulaire sinon) */
+function projeter(p, lat, lon) {
+  if (p.type === "ne") {
+    var l = lon * Math.PI / 180, f = lat * Math.PI / 180, f2 = f * f, f4 = f2 * f2;
+    var x = l * (0.8707 - 0.131979 * f2 + f4 * (-0.013791 + f4 * (0.003971 * f2 - 0.001529 * f4)));
+    var y = f * (1.007226 + f2 * (0.015085 + f4 * (-0.044475 + 0.028874 * f2 - 0.005916 * f4)));
+    return [(x + p.xmax) * p.s, (p.ymax - y) * p.s];
+  }
+  return [(lon - p.lon0) * p.c * p.k, (p.lat1 - lat) * p.k];
+}
+/* zone composée de parties d'un fond (continents, pays, fleuves, massifs) */
+function zoneParts(F, zones, parts, key) {
+  var keys = (zones || {})[key] || (parts[key] ? [key] : parts["oc_" + key] ? ["oc_" + key] : null);
+  if (!keys) return null;
+  return { zones: keys.map(function (k) { return F.parts[k].el; }), type: F.parts[keys[0]].type,
+    labels: keys.reduce(function (a, k) { return a.concat(F.parts[k].labels); }, []).slice(0, keys.length > 2 ? 1 : 2) };
+}
+/* fleuve : un trait visible et un trait large invisible, plus facile à toucher */
+function partFleuve(k, p) {
+  return sv("g", { class: "geo-fleuve", "data-part": k }, sv("path", { d: p.d, class: "geo-fleuve-hit" }), sv("path", { d: p.d, class: "geo-fleuve-trait" }));
+}
 /* fabrique le fond ; renvoie { svg, vb, lieu(l) → {zones: [éléments], labels: [[x,y]], type, x, y} } */
 function fondCarte(fond, lecon) {
   var C = window.CARTES || {}, F = { parts: {} };
@@ -771,11 +792,8 @@ function fondCarte(fond, lecon) {
     F.svg.appendChild(gE); F.svg.appendChild(gT);
     (m.textes || []).forEach(function (t) { F.svg.appendChild(sv("text", { x: t[1], y: t[2], class: "geo-fond-txt " + t[3] }, t[0])); });
     F.lieu = function (l) {
-      if (mp && l.lat != null && l.lon != null) return { type: "point", x: (l.lon - mp.lon0) * mp.c * mp.k, y: (mp.lat1 - l.lat) * mp.k };
-      var zs = m.zones || {}, keys = zs[l.zone] || (m.parts[l.zone] ? [l.zone] : m.parts["oc_" + l.zone] ? ["oc_" + l.zone] : null);
-      if (!keys) return null;
-      return { zones: keys.map(function (k) { return F.parts[k].el; }), type: F.parts[keys[0]].type,
-        labels: keys.reduce(function (a, k) { return a.concat(F.parts[k].labels); }, []).slice(0, keys.length > 2 ? 1 : 2) };
+      if (mp && l.lat != null && l.lon != null) { var q = projeter(mp, l.lat, l.lon); return { type: "point", x: q[0], y: q[1] }; }
+      return l.zone ? zoneParts(F, m.zones, m.parts, l.zone) : null;
     };
   } else if (fond === "france" && C.france) {
     var f = C.france, pr = f.proj; F.vb = f.vb;
@@ -783,10 +801,20 @@ function fondCarte(fond, lecon) {
       sv("rect", { x: 0, y: 0, width: f.vb[2], height: f.vb[3], class: "geo-eau" }),
       sv("path", { d: f.voisins, class: "geo-voisin" }), sv("path", { d: f.france, class: "geo-terre" }),
       sv("path", { d: f.regions, class: "geo-limite" }));
+    /* relief et fleuves : massifs en zones, fleuves en traits */
+    var fp = f.parts || {}, gM = sv("g"), gF = sv("g");
+    Object.keys(fp).forEach(function (k) {
+      var p = fp[k], el = p.type === "fleuve" ? partFleuve(k, p) : sv("path", { d: p.d, class: "geo-massif", "data-part": k });
+      (p.type === "fleuve" ? gF : gM).appendChild(el);
+      F.parts[k] = { el: el, nom: p.nom, labels: p.labels, type: p.type };
+    });
+    F.svg.appendChild(gM); F.svg.appendChild(gF);
     f.textes.forEach(function (t) { F.svg.appendChild(sv("text", { x: t[1], y: t[2], class: "geo-fond-txt " + t[3] }, t[0])); });
     F.lieu = function (l) {
+      if (l.zone) return zoneParts(F, null, fp, l.zone);
       if (l.lat == null || l.lon == null) return null;
-      return { type: "point", x: (l.lon - pr.lon0) * pr.c * pr.k, y: (pr.lat1 - l.lat) * pr.k };
+      var q = projeter(pr, l.lat, l.lon);
+      return { type: "point", x: q[0], y: q[1] };
     };
   } else {
     var im = ((lecon || D).images || []).filter(function (x) { return x.id === fond; })[0];
@@ -849,11 +877,12 @@ function blocCarte(b) {
   b.reperes.forEach(function (l) {
     var r = F.lieu(l); if (!r) return;
     if (r.type === "point") geoPoint(F, r);
+    else if (r.type === "fleuve") r.zones.forEach(function (z) { z.classList.add("repere"); });
     else r.zones.forEach(function (z) { z.style.fill = r.type === "ocean" ? GEO_BLEUS[bleu % GEO_BLEUS.length] : GEO_COUL[coul % GEO_COUL.length]; });
-    if (r.type === "ocean") bleu++; else if (r.type !== "point") coul++;
+    if (r.type === "ocean") bleu++; else if (r.type !== "point" && r.type !== "fleuve") coul++;
     etiq = etiq.concat(labelsDe(F, l, r).map(function (p) { return [p, plain(l.nom), r.type]; }));
   });
-  etiq.forEach(function (e) { geoLabel(F, e[0][0], e[0][1], e[1], e[2] === "ocean" ? "eau" : ""); });
+  etiq.forEach(function (e) { geoLabel(F, e[0][0], e[0][1], e[1], e[2] === "ocean" || e[2] === "fleuve" ? "eau" : ""); });
   if (b.rose) geoRose(F);
   F.svg.setAttribute("role", "img");
   F.svg.setAttribute("aria-label", (b.titre ? plain(b.titre) + " : " : "Carte : ") + b.reperes.map(function (l) { return plain(l.nom); }).join(", "));
@@ -885,7 +914,7 @@ function stepCarte(main) {
     var q = Q[qi], c = q.c, F = fondCarte(C.fond), tries = 0, solved = false, faux = [], evt = null;
     var R = {}; /* id de cible → résolution sur ce fond */
     cibles.forEach(function (x) { R[x.id] = F.lieu(x); });
-    var r = R[c.id], cible = r.type === "ocean" ? "cet océan" : r.type === "continent" ? "ce continent" : r.type === "pays" ? "ce pays" : "ce lieu";
+    var r = R[c.id], cible = r.type === "ocean" ? "cet océan" : r.type === "continent" ? "ce continent" : r.type === "pays" ? "ce pays" : r.type === "fleuve" ? "ce fleuve" : r.type === "montagne" ? "ce massif" : "ce lieu";
     function noteGeo(ok) {
       var o = { erreurs: tries, faux: faux.slice(), resolu: ok };
       if (evt) journal.maj(evt, o);
@@ -898,7 +927,7 @@ function stepCarte(main) {
       if (rx.type === "point") cible2el[x.id] = [geoPoint(F, rx, x.id)];
       else { rx.zones.forEach(function (z) { z.classList.add("geo-cible"); z.setAttribute("data-cible", x.id); }); cible2el[x.id] = rx.zones; }
     });
-    function etiquette(x, cls) { labelsDe(F, x, R[x.id]).forEach(function (p) { geoLabel(F, p[0], p[1], plain(x.nom), (R[x.id].type === "ocean" ? "eau " : "") + (cls || "")); }); }
+    function etiquette(x, cls) { labelsDe(F, x, R[x.id]).forEach(function (p) { geoLabel(F, p[0], p[1], plain(x.nom), (R[x.id].type === "ocean" || R[x.id].type === "fleuve" ? "eau " : "") + (cls || "")); }); }
     if (q.mode === "trouver") cibles.forEach(function (x) { if (trouves[x.id]) { cible2el[x.id].forEach(function (e) { e.classList.add("geo-ok"); }); etiquette(x); } });
     if (C.rose) geoRose(F);
     var titre, qsay;
@@ -947,13 +976,15 @@ function stepCarte(main) {
       F.svg.addEventListener("click", function (ev) {
         if (solved) return;
         var t = ev.target, estPoint = t.classList && t.classList.contains("geo-point");
+        if (!estPoint && t.closest && t.closest("[data-cible],[data-part]")) t = t.closest("[data-cible],[data-part]");
         /* zone sous le doigt (même sous un point) et point le plus proche (tolérance pour le doigt) */
         var zoneId = !estPoint && t.getAttribute ? t.getAttribute("data-cible") : null, sous = null;
         if (!zoneId && document.elementsFromPoint && (ev.clientX || ev.clientY)) {
           document.elementsFromPoint(ev.clientX, ev.clientY).some(function (e) {
             if (e.classList && e.classList.contains("geo-point")) return false;
-            if (e.getAttribute && e.getAttribute("data-cible")) { zoneId = e.getAttribute("data-cible"); return true; }
-            if (e.getAttribute && e.getAttribute("data-part") && !sous) sous = e;
+            var z = e.closest ? e.closest("[data-cible],[data-part]") : e;
+            if (z && z.getAttribute("data-cible")) { zoneId = z.getAttribute("data-cible"); return true; }
+            if (z && z.getAttribute("data-part") && !sous) sous = z;
             return false;
           });
         }
@@ -1107,6 +1138,51 @@ var ANIMS = {
       cap.textContent = "Jour " + j + " : " + etat + ".";
     };
   }
+};
+ANIMS.cycle_eau = function (svg, cap) {
+  svg.setAttribute("viewBox", "0 0 800 460");
+  var T = 14, PH = [
+    ["évaporation", "1. Le Soleil chauffe la mer : l'eau s'évapore, elle devient de la vapeur."],
+    ["nuages", "2. La vapeur monte, refroidit et forme des nuages."],
+    ["pluie", "3. L'eau des nuages tombe : pluie, ou neige en montagne."],
+    ["ruissellement", "4. L'eau ruisselle, rejoint les rivières et retourne à la mer."]];
+  svg.appendChild(sv("rect", { x: 0, y: 0, width: 800, height: 460, class: "ciel" }));
+  svg.appendChild(soleil(90, 80, 38, 14));
+  svg.appendChild(sv("path", { d: "M340 460 L360 385 Q450 360 520 330 L610 160 L680 250 L720 205 L800 280 L800 460Z", class: "sol" }));
+  svg.appendChild(sv("path", { d: "M584 212 L610 160 L638 216 L622 204 L606 220 L594 206Z", class: "neige" }));
+  svg.appendChild(sv("path", { d: "M0 362 Q60 350 120 362 T240 362 T380 362 L400 460 L0 460Z", class: "mer" }));
+  var riviere = sv("path", { d: "M636 248 C600 300 566 296 544 338 S452 382 376 392", class: "riviere" });
+  svg.appendChild(riviere);
+  svg.appendChild(sv("text", { x: 150, y: 425, class: "eau-txt clair" }, "mer"));
+  var vap = [];
+  for (var i = 0; i < 7; i++) { var c = sv("circle", { r: 6, class: "vapeur" }); svg.appendChild(c); vap.push({ c: c, x: 50 + i * 42, d: i / 7 }); }
+  var nuage = sv("g", { class: "nuage" });
+  [[0, 0, 34], [36, -12, 30], [70, 0, 32], [34, 14, 30]].forEach(function (n) { nuage.appendChild(sv("circle", { cx: n[0], cy: n[1], r: n[2] })); });
+  svg.appendChild(nuage);
+  var gouttes = [];
+  for (i = 0; i < 9; i++) { var g = sv("line", { class: "goutte" }); svg.appendChild(g); gouttes.push({ el: g, dx: -20 + i * 13, d: (i * 37 % 9) / 9 }); }
+  var L = [sv("text", { x: 215, y: 250, class: "eau-txt" }, "évaporation ↑"), sv("text", { x: 330, y: 52, class: "eau-txt" }, "nuages"),
+    sv("text", { x: 470, y: 228, class: "eau-txt" }, "pluie"), sv("text", { x: 470, y: 420, class: "eau-txt clair" }, "ruissellement")];
+  L.forEach(function (x) { svg.appendChild(x); });
+  return function (t) {
+    var u = (t % T) / T * 4, ph = Math.floor(u), f = u - ph;
+    L.forEach(function (x, k) { x.classList.toggle("on", k === ph); });
+    cap.textContent = PH[ph][1];
+    vap.forEach(function (v) {
+      var a = ((t / 3 + v.d) % 1), on = ph === 0 ? 1 : 0.35;
+      v.c.setAttribute("cx", (v.x + Math.sin(a * 9 + v.d * 6) * 6).toFixed(1)); v.c.setAttribute("cy", (350 - a * 200).toFixed(1));
+      v.c.setAttribute("opacity", ((1 - a) * on).toFixed(2));
+    });
+    var nx = ph === 0 ? 200 : ph === 1 ? 200 + 330 * f : 530, op = ph === 0 ? 0.25 + 0.5 * f : ph === 3 ? 1 - 0.7 * f : 1;
+    nuage.setAttribute("transform", "translate(" + nx.toFixed(1) + " 110)"); nuage.setAttribute("opacity", op.toFixed(2));
+    nuage.classList.toggle("gris", ph === 2);
+    gouttes.forEach(function (g) {
+      var a = (t * 1.4 + g.d) % 1, y = 150 + a * 150, x = nx + 35 + g.dx;
+      g.el.setAttribute("x1", x); g.el.setAttribute("y1", y); g.el.setAttribute("x2", x - 3); g.el.setAttribute("y2", y + 14);
+      g.el.setAttribute("opacity", ph === 2 ? 1 : 0);
+    });
+    riviere.style.strokeDashoffset = (-t * (ph === 3 ? 60 : 20)).toFixed(1);
+  };
 };
 function blocAnimation(b) {
   var svg = sv("svg", { class: "anim " + b.modele, role: "img", "aria-label": b.legende ? plain(b.legende) : "Animation" });
@@ -1828,7 +1904,9 @@ var THEMES = [
   ["problemes", "mathematiques", "💡", "Problèmes"], ["donnees", "mathematiques", "📊", "Tableaux et graphiques"],
   ["astres", "questionner_le_monde", "☀️", "La Terre et les astres", "Questionner l'espace"],
   ["monde", "questionner_le_monde", "🌍", "Continents et océans", "Questionner l'espace"],
-  ["lieux", "questionner_le_monde", "📍", "Villes et lieux", "Questionner l'espace"]
+  ["lieux", "questionner_le_monde", "📍", "Villes et lieux", "Questionner l'espace"],
+  ["milieux", "questionner_le_monde", "🏞️", "Paysages et modes de vie", "Questionner l'espace"],
+  ["eau", "questionner_le_monde", "💧", "L'eau", "Questionner la matière"]
 ].map(function (x) { return { key: x[0], matiere: x[1], icon: x[2], label: x[3], rubrique: x[4] || null }; });
 var THEME = {}; THEMES.forEach(function (x) { THEME[x.key] = x; });
 var ORDRE_MATIERES = ["francais", "mathematiques", "questionner_le_monde", "langue_vivante", "emc", "arts", "autre"];

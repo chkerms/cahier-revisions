@@ -1,0 +1,80 @@
+{
+ "schema_version": "2.0",
+ "meta": {
+  "id": "essai-espace-france",
+  "titre": "Essai : fleuves et montagnes",
+  "date": "2026-11-16",
+  "methode": "aucune",
+  "matiere": "questionner_le_monde",
+  "domaine": "questionner l'espace",
+  "theme": "milieux",
+  "type_lecon": "notion",
+  "niveau": "CE2",
+  "complete": true,
+  "statut": "pret"
+ },
+ "styles": {},
+ "lecon": {
+  "blocs": [
+   {
+    "id": "b1",
+    "type": "titre",
+    "texte": "Essai : fleuves et montagnes"
+   },
+   {
+    "id": "b2",
+    "type": "carte",
+    "fond": "france",
+    "titre": "Relief",
+    "reperes": [
+     {
+      "nom": "Loire",
+      "zone": "loire"
+     },
+     {
+      "nom": "Alpes",
+      "zone": "alpes"
+     },
+     {
+      "nom": "Lyon",
+      "lat": 45.764,
+      "lon": 4.8357
+     }
+    ]
+   }
+  ]
+ },
+ "carte": {
+  "fond": "france",
+  "modes": [
+   "trouver"
+  ],
+  "cibles": [
+   {
+    "id": "g1",
+    "nom": "Loire",
+    "zone": "loire"
+   },
+   {
+    "id": "g2",
+    "nom": "Alpes",
+    "zone": "alpes"
+   },
+   {
+    "id": "g3",
+    "nom": "Massif central",
+    "zone": "massif_central"
+   },
+   {
+    "id": "g4",
+    "nom": "Lyon",
+    "lat": 45.764,
+    "lon": 4.8357
+   }
+  ]
+ },
+ "parcours": [
+  "lecon",
+  "carte"
+ ]
+}

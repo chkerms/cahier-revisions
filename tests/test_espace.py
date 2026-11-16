@@ -1,7 +1,7 @@
 """Test de bout en bout de la rubrique « Questionner l'espace » (cartes et animations), au format tablette Android.
 
 Usage : python3 tests/test_espace.py http://localhost:8765/ MOT_DE_PASSE [dossier_captures]
-Prérequis : une copie jetable avec tests/fixtures/essai_espace_monde.json et tests/fixtures/essai_espace_lieux.json publiées.
+Prérequis : une copie jetable avec tests/fixtures/essai_espace_monde.json, essai_espace_lieux.json et essai_espace_france.json publiées.
 Vérifie : rubrique sur l'accueil, animations (mouvement, pause), cartes de leçon (monde, France, fond local),
 étape « Sur la carte » (toucher une zone, un point, avec tolérance ; erreur nommée ; lieu montré après 3 erreurs ; nommer),
 étoiles, journal et bilan, carte du programme dans la Zone parent, aucune erreur JavaScript.
@@ -18,6 +18,7 @@ SHOTS = Path(sys.argv[3]) if len(sys.argv) > 3 else None
 FIX = Path(__file__).resolve().parent / "fixtures"
 MONDE = json.loads((FIX / "essai_espace_monde.json").read_text(encoding="utf-8"))
 LIEUX = json.loads((FIX / "essai_espace_lieux.json").read_text(encoding="utf-8"))
+FRANCE = json.loads((FIX / "essai_espace_france.json").read_text(encoding="utf-8"))
 fails = []
 
 
@@ -60,8 +61,8 @@ with sync_playwright() as pw:
 
     print("== Animations")
     ouvrir("monde", "essai-espace-monde")
-    check(p.locator("svg.anim").count() == 4, "4 animations dessinées")
-    for m in ("systeme_solaire", "jour_nuit", "annee", "lune"):
+    check(p.locator("svg.anim").count() == 5, "5 animations dessinées")
+    for m in ("systeme_solaire", "jour_nuit", "annee", "lune", "cycle_eau"):
         check(p.locator(f"svg.anim.{m}").count() == 1, f"animation {m}")
     cap = lambda m: p.eval_on_selector(f"svg.anim.{m}", "s => s.nextElementSibling.textContent")
     c0 = cap("jour_nuit"); p.wait_for_timeout(1500); c1 = cap("jour_nuit")
@@ -71,6 +72,8 @@ with sync_playwright() as pw:
     check(a0 != pos(), "année : la Terre se déplace")
     d0 = p.eval_on_selector("svg.anim.lune", "s => s.querySelectorAll('.lune-claire')[1].getAttribute('d')"); p.wait_for_timeout(600)
     check(d0 != p.eval_on_selector("svg.anim.lune", "s => s.querySelectorAll('.lune-claire')[1].getAttribute('d')"), "Lune : la forme vue de la Terre change")
+    e0 = cap("cycle_eau"); p.wait_for_timeout(3800)
+    check(e0 != cap("cycle_eau") and p.locator("svg.anim.cycle_eau text.on").count() == 1, "cycle de l'eau : les étapes s'enchaînent, une seule en valeur")
     p.click("[data-anim=jour_nuit]"); p.wait_for_timeout(200)
     c2 = cap("jour_nuit"); p.wait_for_timeout(1200)
     check(cap("jour_nuit") == c2 and "Lecture" in p.inner_text("[data-anim=jour_nuit]"), "pause : l'animation s'arrête")
@@ -78,7 +81,8 @@ with sync_playwright() as pw:
 
     print("== Carte de la leçon (monde)")
     labels = p.eval_on_selector_all(".geo-bloc text.geo-label", "els => els.map(e => e.textContent)")
-    check({"Afrique", "Amérique", "Asie", "Europe", "Océan Atlantique"} <= set(labels), f"repères nommés ({labels})")
+    check({"Afrique", "Amérique", "Asie", "Europe", "Océan Atlantique", "La Réunion"} <= set(labels), f"repères nommés ({labels})")
+    check(p.locator(".geo-bloc svg.monde .geo-point").count() == 1, "planisphère : une île placée par latitude et longitude")
     remplis = p.eval_on_selector_all(".geo-bloc [data-part]", "els => els.filter(e => e.style.fill).length")
     check(remplis == 6, f"zones colorées : 4 continents (Amérique en 2 parties) + 1 océan ({remplis})")
 
@@ -160,6 +164,34 @@ with sync_playwright() as pw:
         p.click("#next-btn")
     check(p.inner_text(".geo-q .q") == "Quel est ce lieu ?", "nommer sur un fond local : « Quel est ce lieu ? »")
     shot(p, "e6_nommer_local.png")
+
+    print("== Fleuves et montagnes (fond France)")
+    accueil()
+    check("milieux" in p.eval_on_selector_all(".theme-tile", "els => els.map(e => e.dataset.theme)"), "thème Paysages et modes de vie")
+    ouvrir("milieux", "essai-espace-france")
+    check(p.locator(".geo-bloc .geo-fleuve.repere").count() == 1, "carte : la Loire en repère (trait épais)")
+    remplis = p.eval_on_selector_all(".geo-bloc .geo-massif", "els => els.filter(e => e.style.fill).length")
+    check(remplis == 1, f"carte : les Alpes coloriées ({remplis})")
+    p.click("[data-step=carte]"); p.wait_for_selector(".geo-q")
+    noms = {c["nom"]: c["id"] for c in FRANCE["carte"]["cibles"]}
+    for i in range(len(noms)):
+        nom = p.inner_text(".geo-q strong")
+        if nom == "Loire":
+            # le doigt touche le trait large invisible, pas le trait bleu
+            p.locator(".jeu .geo-fleuve[data-cible] .geo-fleuve-hit").dispatch_event("click")
+            check("Bravo" in p.inner_text(".geo-fb") and p.locator(".jeu .geo-fleuve.geo-ok").count() == 1, "fleuve touché (zone large autour du trait)")
+        elif nom == "Lyon":
+            x, y = (lambda b: (b["x"] + b["width"] / 2, b["y"] + b["height"] / 2))(p.locator(".jeu .geo-point").bounding_box())
+            p.mouse.click(x, y)
+            check("Bravo" in p.inner_text(".geo-fb"), "ville touchée, même posée près du Rhône")
+        else:
+            if i == 0 or nom == "Massif central":
+                p.locator(".jeu .geo-fleuve[data-part=seine] .geo-fleuve-hit").dispatch_event("click")
+                check("la Seine" in p.inner_text(".geo-fb"), "fleuve hors cible touché : nommé (« la Seine »)")
+            p.locator(f".jeu [data-cible={noms[nom]}]").first.dispatch_event("click")
+            check("Bravo" in p.inner_text(".geo-fb"), f"massif touché : {nom}")
+        p.click("#next-btn")
+    shot(p, "e7_france.png")
 
     print("== Journal, bilan et Zone parent")
     accueil()
